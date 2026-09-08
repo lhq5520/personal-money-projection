@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import type { MonteCarloResult, YearPoint } from '@pmp/engine';
-import { compactMoney, money, niceTicks } from '../lib/format.js';
+import type { MonteCarloResult, RegionCode, YearPoint } from '@pmp/engine';
+import { niceTicks } from '../lib/format.js';
+import { useFormat } from '../hooks/useFormat.js';
 import { useMeasure } from '../hooks/useMeasure.js';
+import { useI18n } from '../i18n/index.js';
 
 export type ValueMode = 'nominal' | 'real';
 
@@ -10,9 +12,10 @@ interface Props {
   mc: MonteCarloResult | null;
   mode: ValueMode;
   inflationRate: number;
+  region: RegionCode;
 }
 
-const PAD = { l: 58, r: 78, t: 16, b: 30 };
+const PAD = { l: 62, r: 92, t: 16, b: 30 };
 const HEIGHT = 340;
 
 /**
@@ -23,18 +26,20 @@ const HEIGHT = 340;
  * 扇形区间不是第三个实体，而是「账户价值」自身的不确定性，
  * 所以与中位线同色、只降透明度。
  */
-export function FanChart({ timeline, mc, mode, inflationRate }: Props) {
+export function FanChart({ timeline, mc, mode, inflationRate, region }: Props) {
   const [ref, width] = useMeasure<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  const { t } = useI18n();
+  const fmt = useFormat(region);
 
   const years = timeline.length - 1;
   const innerW = Math.max(120, width - PAD.l - PAD.r);
   const innerH = HEIGHT - PAD.t - PAD.b;
 
-  const discount = (v: number, y: number) =>
-    mode === 'real' ? v / Math.pow(1 + inflationRate, y) : v;
-
   const series = useMemo(() => {
+    const discount = (v: number, y: number) =>
+      mode === 'real' ? v / Math.pow(1 + inflationRate, y) : v;
+
     const contribution = timeline.map((p, y) => discount(p.contribution, y));
     const median: number[] = [timeline[0]?.contribution ?? 0];
     const lo10: number[] = [median[0]!];
@@ -69,7 +74,7 @@ export function FanChart({ timeline, mc, mode, inflationRate }: Props) {
   const line = (vals: number[]) => vals.map((v, y) => `${y ? 'L' : 'M'}${x(y)},${yScale(v)}`).join(' ');
   const band = (lo: number[], hi: number[]) =>
     `${hi.map((v, y) => `${y ? 'L' : 'M'}${x(y)},${yScale(v)}`).join(' ')} ` +
-    `${lo.map((v, y) => `L${x(lo.length - 1 - y)},${yScale(lo[lo.length - 1 - y]!)}`).join(' ')} Z`;
+    `${lo.map((_, y) => `L${x(lo.length - 1 - y)},${yScale(lo[lo.length - 1 - y]!)}`).join(' ')} Z`;
 
   const yearTicks = Array.from({ length: years + 1 }, (_, i) => i).filter(
     (i) => i === 0 || i === years || i % Math.max(1, Math.round(years / 6)) === 0,
@@ -77,12 +82,11 @@ export function FanChart({ timeline, mc, mode, inflationRate }: Props) {
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const y = Math.round(((px - PAD.l) / innerW) * years);
+    const y = Math.round(((e.clientX - rect.left - PAD.l) / innerW) * years);
     setHover(y >= 0 && y <= years ? y : null);
   };
 
-  const label = mode === 'real' ? '（今日购买力）' : '（名义）';
+  const suffix = mode === 'real' ? ` · ${t('mode.real')}` : '';
 
   return (
     <div className="chart-wrap" ref={ref}>
@@ -91,15 +95,15 @@ export function FanChart({ timeline, mc, mode, inflationRate }: Props) {
         width={width}
         height={HEIGHT}
         role="img"
-        aria-label={`账户价值投影${label}，第 0 到第 ${years} 年，含 P10 至 P90 分位区间`}
+        aria-label={t('chart.aria.fan', { years })}
         onMouseMove={handleMove}
         onMouseLeave={() => setHover(null)}
       >
-        {ticks.map((t, i) => (
+        {ticks.map((tick, i) => (
           <g key={i}>
-            <line x1={PAD.l} x2={PAD.l + innerW} y1={yScale(t)} y2={yScale(t)} stroke="var(--gridline)" strokeWidth={1} />
-            <text x={PAD.l - 8} y={yScale(t) + 4} textAnchor="end" fontSize={11} fill="var(--text-muted)">
-              {compactMoney(t)}
+            <line x1={PAD.l} x2={PAD.l + innerW} y1={yScale(tick)} y2={yScale(tick)} stroke="var(--gridline)" strokeWidth={1} />
+            <text x={PAD.l - 8} y={yScale(tick) + 4} textAnchor="end" fontSize={11} fill="var(--text-muted)">
+              {fmt.compact(tick)}
             </text>
           </g>
         ))}
@@ -112,16 +116,16 @@ export function FanChart({ timeline, mc, mode, inflationRate }: Props) {
 
         {/* 直接标注末端，读者不必在图例和曲线之间来回找 */}
         <text x={x(years) + 7} y={yScale(series.median[years]!) + 4} fontSize={11.5} fill="var(--text-secondary)">
-          账户价值
+          {t('chart.series.value')}
         </text>
         <text x={x(years) + 7} y={yScale(series.contribution[years]!) + 4} fontSize={11.5} fill="var(--text-secondary)">
-          投入本金
+          {t('chart.series.contributionShort')}
         </text>
 
         <line x1={PAD.l} x2={PAD.l + innerW} y1={PAD.t + innerH} y2={PAD.t + innerH} stroke="var(--axis)" strokeWidth={1} />
         {yearTicks.map((y) => (
           <text key={y} x={x(y)} y={HEIGHT - 9} textAnchor="middle" fontSize={11} fill="var(--text-muted)">
-            {y}年
+            {t('chart.axis.year', { n: y })}
           </text>
         ))}
 
@@ -138,16 +142,13 @@ export function FanChart({ timeline, mc, mode, inflationRate }: Props) {
       {hover !== null && (
         <div
           className="tooltip"
-          style={{
-            left: Math.min(Math.max(x(hover) + 12, 8), Math.max(8, width - 190)),
-            top: PAD.t + 4,
-          }}
+          style={{ left: Math.min(Math.max(x(hover) + 12, 8), Math.max(8, width - 210)), top: PAD.t + 4 }}
         >
-          <div className="t-title">第 {hover} 年{label}</div>
-          <div className="t-row"><span>P90 乐观</span><strong>{money(series.hi90[hover]!)}</strong></div>
-          <div className="t-row"><span>P50 中位</span><strong>{money(series.median[hover]!)}</strong></div>
-          <div className="t-row"><span>P10 悲观</span><strong>{money(series.lo10[hover]!)}</strong></div>
-          <div className="t-row"><span>投入本金</span><strong>{money(series.contribution[hover]!)}</strong></div>
+          <div className="t-title">{t('chart.axis.year', { n: hover })}{suffix}</div>
+          <div className="t-row"><span>{t('chart.tooltip.p90')}</span><strong>{fmt.money(series.hi90[hover]!)}</strong></div>
+          <div className="t-row"><span>{t('chart.tooltip.p50')}</span><strong>{fmt.money(series.median[hover]!)}</strong></div>
+          <div className="t-row"><span>{t('chart.tooltip.p10')}</span><strong>{fmt.money(series.lo10[hover]!)}</strong></div>
+          <div className="t-row"><span>{t('chart.series.contributionShort')}</span><strong>{fmt.money(series.contribution[hover]!)}</strong></div>
         </div>
       )}
     </div>

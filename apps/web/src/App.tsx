@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DEFAULT_INPUT } from '@pmp/engine';
+import { defaultInput, getRegion } from '@pmp/engine';
 import { buildShareUrl, readInputFromUrl, type ProjectionInputDTO } from '@pmp/shared';
 import { useProjection } from './hooks/useProjection.js';
+import { useFormat } from './hooks/useFormat.js';
 import { applyTheme, loadLocalInput, loadTheme, saveLocalInput, saveTheme, type ThemePref } from './lib/storage.js';
-import { money, percent } from './lib/format.js';
+import { LANGS, useI18n, type TranslationKey } from './i18n/index.js';
 import { ControlPanel } from './components/ControlPanel.js';
 import { MetricCards } from './components/MetricCards.js';
 import { FanChart, type ValueMode } from './components/FanChart.js';
@@ -16,10 +17,11 @@ import { Disclaimer } from './components/Disclaimer.js';
 
 /** 启动时的参数优先级：分享链接 > 本地存档 > 默认值 */
 function initialInput(): ProjectionInputDTO {
-  return readInputFromUrl(window.location.search) ?? loadLocalInput() ?? (DEFAULT_INPUT as ProjectionInputDTO);
+  return readInputFromUrl(window.location.search) ?? loadLocalInput() ?? (defaultInput('CN') as ProjectionInputDTO);
 }
 
 export function App() {
+  const { t, lang, setLang } = useI18n();
   const [input, setInput] = useState<ProjectionInputDTO>(initialInput);
   const [mode, setMode] = useState<ValueMode>('nominal');
   const [view, setView] = useState<'chart' | 'table'>('chart');
@@ -27,6 +29,8 @@ export function App() {
   const [copied, setCopied] = useState(false);
 
   const { result, mc, mcPending } = useProjection(input);
+  const fmt = useFormat(input.region);
+  const region = getRegion(input.region);
 
   useEffect(() => { saveLocalInput(input); }, [input]);
   useEffect(() => { applyTheme(theme); saveTheme(theme); }, [theme]);
@@ -47,21 +51,29 @@ export function App() {
     const y1 = result.years[0];
     const m1 = result.months[0];
     if (!y1 || !m1) return [];
-    return [
-      { label: '税前收入', value: y1.grossAnnual / 12, kind: 'total' },
-      { label: '五险一金', value: -(m1.socialInsurance + m1.housingFundSelf), kind: 'decrease' },
-      { label: '个税', value: -y1.taxAnnual / 12, kind: 'decrease' },
-      { label: '到手现金', value: y1.avgMonthlyNet, kind: 'total' },
-      { label: '餐补', value: m1.mealAllowance, kind: 'increase' },
-      { label: '公积金提取', value: m1.housingFundWithdrawal, kind: 'increase' },
-      { label: '生活开销', value: -m1.spend, kind: 'decrease' },
-      { label: '每月可投', value: m1.invested, kind: 'result' },
+    const steps: WaterfallStep[] = [
+      { label: t('waterfall.gross'), value: y1.grossAnnual / 12, kind: 'total' },
+      { label: t(`waterfall.social.${input.region}` as TranslationKey), value: -(m1.socialInsurance + m1.planSelf), kind: 'decrease' },
+      { label: t('waterfall.tax'), value: -y1.taxAnnual / 12, kind: 'decrease' },
+      { label: t('waterfall.net'), value: y1.avgMonthlyNet, kind: 'total' },
     ];
-  }, [result]);
+    // 只在实际存在时才占一格，避免图上出现一堆高度为 0 的柱子
+    if (m1.taxFreeAllowance > 0) {
+      steps.push({ label: t('waterfall.allowance'), value: m1.taxFreeAllowance, kind: 'increase' });
+    }
+    if (m1.planWithdrawal > 0) {
+      steps.push({ label: t('waterfall.withdrawal'), value: m1.planWithdrawal, kind: 'increase' });
+    }
+    steps.push(
+      { label: t('waterfall.spend'), value: -m1.spend, kind: 'decrease' },
+      { label: t('waterfall.investable'), value: m1.invested, kind: 'result' },
+    );
+    return steps;
+  }, [result, input.region, t]);
 
   const terminal = mc
     ? mode === 'real'
-      ? mc.byYear[mc.byYear.length - 1]?.real.p50 ?? 0
+      ? (mc.byYear[mc.byYear.length - 1]?.real.p50 ?? 0)
       : mc.terminal.p50
     : mode === 'real'
       ? result.summary.finalValueReal
@@ -71,20 +83,26 @@ export function App() {
     <main className="wrap">
       <div className="topbar">
         <div>
-          <h1>Personal Money Projection</h1>
-          <p className="sub">
-            从工资条到长期投资的个人财务投影。中国个税与五险一金按城市精算，
-            结果同时给出名义金额与今日购买力两个口径，并用分布而不是单条曲线来表达不确定性。
-          </p>
+          <h1>{t('app.title')}</h1>
+          <p className="sub">{t('app.subtitle')}</p>
         </div>
         <div className="btn-row">
-          <div className="toggle-group" role="group" aria-label="主题">
-            <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>浅色</button>
-            <button aria-pressed={theme === 'system'} onClick={() => setTheme('system')}>跟随系统</button>
-            <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>深色</button>
+          <div className="toggle-group" role="group" aria-label={t('nav.lang')}>
+            {LANGS.map((l) => (
+              <button key={l.code} aria-pressed={lang === l.code} onClick={() => setLang(l.code)}>
+                {l.label}
+              </button>
+            ))}
           </div>
-          <button onClick={() => void share()}>{copied ? '链接已复制' : '复制分享链接'}</button>
-          <button onClick={() => setInput(DEFAULT_INPUT as ProjectionInputDTO)}>重置参数</button>
+          <div className="toggle-group" role="group" aria-label={t('nav.theme')}>
+            <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>{t('nav.theme.light')}</button>
+            <button aria-pressed={theme === 'system'} onClick={() => setTheme('system')}>{t('nav.theme.system')}</button>
+            <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>{t('nav.theme.dark')}</button>
+          </div>
+          <button onClick={() => void share()}>{copied ? t('nav.shared') : t('nav.share')}</button>
+          <button onClick={() => setInput(defaultInput(input.region) as ProjectionInputDTO)}>
+            {t('nav.reset')}
+          </button>
         </div>
       </div>
 
@@ -94,69 +112,75 @@ export function App() {
         <div className="stack">
           <div>
             <div className="chart-head">
-              <div className="toggle-group" role="group" aria-label="金额口径">
-                <button aria-pressed={mode === 'nominal'} onClick={() => setMode('nominal')}>名义金额</button>
-                <button aria-pressed={mode === 'real'} onClick={() => setMode('real')}>今日购买力</button>
+              <div className="toggle-group" role="group" aria-label={t('mode.nominal')}>
+                <button aria-pressed={mode === 'nominal'} onClick={() => setMode('nominal')}>{t('mode.nominal')}</button>
+                <button aria-pressed={mode === 'real'} onClick={() => setMode('real')}>{t('mode.real')}</button>
               </div>
               <span className="muted">
                 {mode === 'real'
-                  ? `已按 ${percent(input.inflation.annualRate)} 年通胀折现`
-                  : '未扣除通胀影响'}
+                  ? t('mode.realNote', { rate: fmt.percent(input.inflation.annualRate) })
+                  : t('mode.nominalNote')}
               </span>
             </div>
             <MetricCards result={result} mc={mc} mode={mode} />
           </div>
 
-          <Warnings items={result.warnings} />
+          <Warnings warnings={result.warnings} region={input.region} />
 
           <section className="panel">
             <div className="chart-head">
               <h2 style={{ margin: 0 }}>
-                账户价值投影
-                {mcPending && <span className="muted" style={{ fontWeight: 400 }}> · 正在模拟…</span>}
+                {t('chart.title')}
+                {mcPending && <span className="muted" style={{ fontWeight: 400 }}> · {t('chart.simulating')}</span>}
               </h2>
               <div className="btn-row">
                 <span className="pill">
-                  {input.investment.years} 年后中位 {money(terminal)}
+                  {t('chart.terminalPill', { years: input.investment.years, value: fmt.money(terminal) })}
                 </span>
-                <div className="toggle-group" role="group" aria-label="展示方式">
-                  <button aria-pressed={view === 'chart'} onClick={() => setView('chart')}>图表</button>
-                  <button aria-pressed={view === 'table'} onClick={() => setView('table')}>表格</button>
+                <div className="toggle-group" role="group" aria-label={t('chart.view.chart')}>
+                  <button aria-pressed={view === 'chart'} onClick={() => setView('chart')}>{t('chart.view.chart')}</button>
+                  <button aria-pressed={view === 'table'} onClick={() => setView('table')}>{t('chart.view.table')}</button>
                 </div>
               </div>
             </div>
 
             {view === 'chart' ? (
-              <FanChart timeline={result.timeline} mc={mc} mode={mode} inflationRate={input.inflation.annualRate} />
+              <FanChart
+                timeline={result.timeline}
+                mc={mc}
+                mode={mode}
+                inflationRate={input.inflation.annualRate}
+                region={input.region}
+              />
             ) : (
               <TimelineTable result={result} mc={mc} mode={mode} />
             )}
 
             <div className="legend">
-              <span><i className="swatch" style={{ background: 'var(--series-1)' }} />账户价值 · 中位数</span>
-              <span><i className="swatch band" style={{ background: 'var(--series-1)' }} />P10–P90 区间</span>
-              <span><i className="swatch" style={{ background: 'var(--series-2)' }} />累计投入本金</span>
-              {mc && <span className="muted">{mc.paths.toLocaleString('zh-CN')} 条模拟路径 · 固定随机种子，结果可复现</span>}
+              <span><i className="swatch" style={{ background: 'var(--series-1)' }} />{t('chart.series.median')}</span>
+              <span><i className="swatch band" style={{ background: 'var(--series-1)' }} />{t('chart.series.band')}</span>
+              <span><i className="swatch" style={{ background: 'var(--series-2)' }} />{t('chart.series.contribution')}</span>
+              {mc && <span className="muted">{t('chart.paths', { paths: mc.paths.toLocaleString(region.numberLocale) })}</span>}
             </div>
           </section>
 
           <section className="panel">
             <div className="chart-head">
-              <h2 style={{ margin: 0 }}>首月现金流分解</h2>
+              <h2 style={{ margin: 0 }}>{t('waterfall.title')}</h2>
               <div className="legend">
-                <span><i className="swatch" style={{ background: 'var(--series-1)' }} />小计</span>
-                <span><i className="swatch" style={{ background: 'var(--series-2)' }} />扣减</span>
-                <span><i className="swatch" style={{ background: 'var(--series-3)' }} />增项与结果</span>
+                <span><i className="swatch" style={{ background: 'var(--series-1)' }} />{t('waterfall.legend.subtotal')}</span>
+                <span><i className="swatch" style={{ background: 'var(--series-2)' }} />{t('waterfall.legend.decrease')}</span>
+                <span><i className="swatch" style={{ background: 'var(--series-3)' }} />{t('waterfall.legend.increase')}</span>
               </div>
             </div>
-            <WaterfallChart steps={waterfall} />
+            <WaterfallChart steps={waterfall} region={input.region} />
           </section>
 
           <Breakdown result={result} />
 
           <SyncPanel input={input} onLoad={setInput} />
 
-          <Disclaimer city={input.city} />
+          <Disclaimer region={input.region} jurisdiction={input.jurisdiction} />
         </div>
       </div>
     </main>

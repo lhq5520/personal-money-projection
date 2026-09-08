@@ -1,5 +1,14 @@
-import { CN_CITIES, getCity } from '@pmp/engine';
+import {
+  ELECTIVE_DEFERRAL_LIMIT,
+  RRSP_DOLLAR_LIMIT,
+  REGION_CODES,
+  defaultInput,
+  getRegion,
+  type RegionCode,
+} from '@pmp/engine';
 import type { ProjectionInputDTO } from '@pmp/shared';
+import { useFormat } from '../hooks/useFormat.js';
+import { useI18n, type TranslationKey } from '../i18n/index.js';
 import { CheckboxField, SelectField, SliderField } from './Fields.js';
 
 interface Props {
@@ -7,150 +16,240 @@ interface Props {
   onChange: (next: ProjectionInputDTO) => void;
 }
 
-const cityOptions = CN_CITIES.map((c) => ({ value: c.code, label: c.name }));
+/** 各国货币量级差异很大，滑杆上限按地区缩放，否则美加用户拖一下就到顶了 */
+const SALARY_MAX: Record<RegionCode, number> = { CN: 200_000, US: 80_000, CA: 80_000 };
+const SPEND_MAX: Record<RegionCode, number> = { CN: 100_000, US: 40_000, CA: 40_000 };
+const CAPITAL_MAX: Record<RegionCode, number> = { CN: 5_000_000, US: 2_000_000, CA: 2_000_000 };
+const STEP: Record<RegionCode, number> = { CN: 100, US: 50, CA: 50 };
 
 export function ControlPanel({ input, onChange }: Props) {
-  const city = getCity(input.city);
+  const { t, name } = useI18n();
+  const region = getRegion(input.region);
+  const fmt = useFormat(input.region);
+  const code = input.region;
 
   const setIncome = (patch: Partial<ProjectionInputDTO['income']>) =>
     onChange({ ...input, income: { ...input.income, ...patch } });
-  const setDeductions = (patch: Partial<ProjectionInputDTO['income']['deductions']>) =>
-    setIncome({ deductions: { ...input.income.deductions, ...patch } });
   const setExpense = (patch: Partial<ProjectionInputDTO['expense']>) =>
     onChange({ ...input, expense: { ...input.expense, ...patch } });
-  const setHF = (patch: Partial<ProjectionInputDTO['housingFund']>) =>
-    onChange({ ...input, housingFund: { ...input.housingFund, ...patch } });
+  const setPlan = (patch: Partial<ProjectionInputDTO['employerPlan']>) =>
+    onChange({ ...input, employerPlan: { ...input.employerPlan, ...patch } });
   const setInv = (patch: Partial<ProjectionInputDTO['investment']>) =>
     onChange({ ...input, investment: { ...input.investment, ...patch } });
+  const setCn = (patch: Partial<ProjectionInputDTO['cn']>) =>
+    onChange({ ...input, cn: { ...input.cn, ...patch } });
+  const setCnDeductions = (patch: Partial<ProjectionInputDTO['cn']['deductions']>) =>
+    setCn({ deductions: { ...input.cn.deductions, ...patch } });
+  const setUs = (patch: Partial<ProjectionInputDTO['us']>) =>
+    onChange({ ...input, us: { ...input.us, ...patch } });
+  const setCa = (patch: Partial<ProjectionInputDTO['ca']>) =>
+    onChange({ ...input, ca: { ...input.ca, ...patch } });
+
+  /**
+   * 换国家时的取舍：
+   *
+   * 以货币计价的字段（薪资、开销、本金）和各国惯例字段（薪数、公积金提取、
+   * 基金费率、股息预扣税）都重置为新地区的默认值——否则 ¥14,600 会原样变成
+   * $14,600，量级差七倍；「15 薪」这种中国特有惯例带到美国也毫无意义。
+   *
+   * 你调过的「市场观点」（年限、预期收益、波动率、投入比例）和三个地区各自的
+   * 税务参数全部保留，因为它们与国家无关或本就分开存放。
+   */
+  const switchRegion = (next: RegionCode) => {
+    const seed = defaultInput(next) as ProjectionInputDTO;
+    onChange({
+      ...seed,
+      income: { ...seed.income, salarySteps: input.income.salarySteps },
+      investment: {
+        ...seed.investment,
+        years: input.investment.years,
+        expectedAnnualReturn: input.investment.expectedAnnualReturn,
+        annualVolatility: input.investment.annualVolatility,
+        investRatio: input.investment.investRatio,
+      },
+      // 三个地区的税务设置各自独立存放，切换时一份都不丢
+      cn: input.cn,
+      us: input.us,
+      ca: input.ca,
+      overrides: input.overrides,
+    });
+  };
+
+  const planName = t(`plan.${region.planCode}` as TranslationKey);
 
   return (
-    <section className="panel controls" aria-label="参数设置">
-      <h2>你的参数</h2>
+    <section className="panel controls" aria-label={t('ctl.title')}>
+      <h2>{t('ctl.title')}</h2>
 
       <fieldset className="group">
-        <legend>地区与政策</legend>
+        <legend>{t('ctl.group.region')}</legend>
         <SelectField
-          label="城市"
-          value={input.city}
-          onChange={(v) => onChange({ ...input, city: v })}
-          options={cityOptions}
-          hint={city.effectiveNote}
+          label={t('region.label')}
+          value={code}
+          onChange={switchRegion}
+          options={REGION_CODES.map((r) => ({ value: r, label: t(`region.${r}` as TranslationKey) }))}
+          hint={t('region.taxYear', { year: region.taxYear })}
         />
-        <CheckboxField
-          label="年终奖可单独计税"
-          checked={input.allowSeparateBonusTax}
-          onChange={(v) => onChange({ ...input, allowSeparateBonusTax: v })}
-          hint="现行政策延续至 2027-12-31。勾选时模型会逐年在「单独计税」和「并入综合所得」之间自动择优。"
+        <SelectField
+          label={t(`region.jurisdiction.${code}` as TranslationKey)}
+          value={input.jurisdiction}
+          onChange={(v) => onChange({ ...input, jurisdiction: v })}
+          options={region.jurisdictions.map((j) => ({ value: j.code, label: name(j.name) }))}
+          hint={name(region.jurisdictions.find((j) => j.code === input.jurisdiction)?.note ?? { zh: '', en: '' })}
         />
       </fieldset>
 
       <fieldset className="group">
-        <legend>收入</legend>
-        <SliderField label="税前月薪" value={input.income.monthlySalary} onChange={(v) => setIncome({ monthlySalary: v })}
-          min={3000} max={200000} step={100} suffix="元" />
-        <SliderField label="全年薪数" value={input.income.salaryMonths} onChange={(v) => setIncome({ salaryMonths: v })}
-          min={12} max={24} step={0.5} decimals={1} suffix="薪"
-          hint="超出 12 的部分按全年一次性奖金计税" />
-        <SliderField label="每月餐补" value={input.income.mealAllowance} onChange={(v) => setIncome({ mealAllowance: v })}
-          min={0} max={5000} step={50} suffix="元" hint="按可自由支配的现金处理" />
-        <SliderField label="年涨薪率" value={input.income.annualGrowthRate} onChange={(v) => setIncome({ annualGrowthRate: v })}
-          min={0} max={0.3} step={0.005} scale={100} decimals={1} suffix="%"
-          hint="原型页面假设终身零涨薪，那是长期投影里最大的失真来源之一" />
+        <legend>{t('ctl.group.income')}</legend>
+        <SliderField label={t('ctl.salary')} value={input.income.monthlySalary} onChange={(v) => setIncome({ monthlySalary: v })}
+          min={0} max={SALARY_MAX[code]} step={STEP[code]} suffix={region.currencySymbol} />
+        <SliderField label={t('ctl.salaryMonths')} value={input.income.salaryMonths} onChange={(v) => setIncome({ salaryMonths: v })}
+          min={12} max={24} step={0.5} decimals={1} suffix={t('unit.month')} hint={t('ctl.salaryMonths.hint')} />
+        <SliderField label={t('ctl.allowance')} value={input.income.taxFreeAllowance} onChange={(v) => setIncome({ taxFreeAllowance: v })}
+          min={0} max={5_000} step={50} suffix={region.currencySymbol} hint={t('ctl.allowance.hint')} />
+        <SliderField label={t('ctl.salaryGrowth')} value={input.income.annualGrowthRate} onChange={(v) => setIncome({ annualGrowthRate: v })}
+          min={0} max={0.3} step={0.005} scale={100} decimals={1} suffix="%" hint={t('ctl.salaryGrowth.hint')} />
       </fieldset>
 
-      <fieldset className="group">
-        <legend>专项附加扣除</legend>
-        <SliderField label="子女教育（人数）" value={input.income.deductions.childrenCount} onChange={(v) => setDeductions({ childrenCount: Math.round(v) })}
-          min={0} max={5} step={1} suffix="人" hint="每人每月 2000 元" />
-        <SliderField label="3 岁以下婴幼儿（人数）" value={input.income.deductions.infantCount} onChange={(v) => setDeductions({ infantCount: Math.round(v) })}
-          min={0} max={5} step={1} suffix="人" hint="每人每月 2000 元" />
-        <SelectField label="继续教育" value={input.income.deductions.continuingEducation}
-          onChange={(v) => setDeductions({ continuingEducation: v })}
-          options={[
-            { value: 'none', label: '无' },
-            { value: 'degree', label: '学历继续教育（400/月）' },
-            { value: 'vocational', label: '职业资格（3600/年）' },
-          ]} />
-        <SelectField label="住房" value={input.income.deductions.housingType}
-          onChange={(v) => setDeductions({ housingType: v })}
-          options={[
-            { value: 'none', label: '无' },
-            { value: 'rent', label: '住房租金' },
-            { value: 'loan', label: '住房贷款利息（1000/月）' },
-          ]}
-          hint="租金与贷款利息不能同时享受" />
-        {input.income.deductions.housingType === 'rent' && (
-          <SelectField label="租金扣除档位" value={input.income.deductions.rentTier ?? city.rentTier}
-            onChange={(v) => setDeductions({ rentTier: v })}
-            options={[
-              { value: 'tier1', label: '直辖市/省会/计划单列市（1500）' },
-              { value: 'tier2', label: '市区户籍人口>100万（1100）' },
-              { value: 'tier3', label: '其余城市（800）' },
-            ]} />
-        )}
-        <SelectField label="赡养老人" value={input.income.deductions.elderlyCare}
-          onChange={(v) => setDeductions({ elderlyCare: v })}
-          options={[
-            { value: 'none', label: '无' },
-            { value: 'only-child', label: '独生子女（3000/月）' },
-            { value: 'shared', label: '非独生子女分摊' },
-          ]} />
-        {input.income.deductions.elderlyCare === 'shared' && (
-          <SliderField label="每月分摊金额" value={input.income.deductions.elderlyShareAmount ?? 1500}
-            onChange={(v) => setDeductions({ elderlyShareAmount: v })}
-            min={0} max={1500} step={100} suffix="元" hint="法定上限 1500 元/月" />
-        )}
-      </fieldset>
+      {code === 'CN' && (
+        <fieldset className="group">
+          <legend>{t('ctl.group.cnDeduction')}</legend>
+          <CheckboxField label={t('ctl.cn.bonusTax')} checked={input.cn.allowSeparateBonusTax}
+            onChange={(v) => setCn({ allowSeparateBonusTax: v })} hint={t('ctl.cn.bonusTax.hint')} />
+          <SliderField label={t('ctl.cn.children')} value={input.cn.deductions.childrenCount}
+            onChange={(v) => setCnDeductions({ childrenCount: Math.round(v) })}
+            min={0} max={5} step={1} suffix={t('unit.person')} hint={t('ctl.cn.children.hint')} />
+          <SliderField label={t('ctl.cn.infants')} value={input.cn.deductions.infantCount}
+            onChange={(v) => setCnDeductions({ infantCount: Math.round(v) })}
+            min={0} max={5} step={1} suffix={t('unit.person')} hint={t('ctl.cn.children.hint')} />
+          <SelectField label={t('ctl.cn.continuing')} value={input.cn.deductions.continuingEducation}
+            onChange={(v) => setCnDeductions({ continuingEducation: v })}
+            options={(['none', 'degree', 'vocational'] as const).map((v) => ({
+              value: v, label: t(`ctl.cn.continuing.${v}` as TranslationKey),
+            }))} />
+          <SelectField label={t('ctl.cn.housing')} value={input.cn.deductions.housingType}
+            onChange={(v) => setCnDeductions({ housingType: v })}
+            options={(['none', 'rent', 'loan'] as const).map((v) => ({
+              value: v, label: t(`ctl.cn.housing.${v}` as TranslationKey),
+            }))}
+            hint={t('ctl.cn.housing.hint')} />
+          {input.cn.deductions.housingType === 'rent' && (
+            <SelectField label={t('ctl.cn.rentTier')} value={input.cn.deductions.rentTier ?? 'tier1'}
+              onChange={(v) => setCnDeductions({ rentTier: v })}
+              options={(['tier1', 'tier2', 'tier3'] as const).map((v) => ({
+                value: v, label: t(`ctl.cn.rentTier.${v}` as TranslationKey),
+              }))} />
+          )}
+          <SelectField label={t('ctl.cn.elderly')} value={input.cn.deductions.elderlyCare}
+            onChange={(v) => setCnDeductions({ elderlyCare: v, elderlyShareAmount: v === 'shared' ? (input.cn.deductions.elderlyShareAmount ?? 1_500) : undefined })}
+            options={(['none', 'only-child', 'shared'] as const).map((v) => ({
+              value: v, label: t(`ctl.cn.elderly.${v}` as TranslationKey),
+            }))} />
+          {input.cn.deductions.elderlyCare === 'shared' && (
+            <SliderField label={t('ctl.cn.elderlyShare')} value={input.cn.deductions.elderlyShareAmount ?? 1_500}
+              onChange={(v) => setCnDeductions({ elderlyShareAmount: v })}
+              min={0} max={1_500} step={100} suffix={region.currencySymbol} hint={t('ctl.cn.elderlyShare.hint')} />
+          )}
+        </fieldset>
+      )}
+
+      {code === 'US' && (
+        <fieldset className="group">
+          <legend>{t('ctl.group.usTax')}</legend>
+          <SelectField label={t('ctl.us.filing')} value={input.us.filingStatus}
+            onChange={(v) => setUs({ filingStatus: v })}
+            options={(['single', 'married-joint', 'married-separate', 'head-of-household'] as const).map((v) => ({
+              value: v, label: t(`ctl.us.filing.${v}` as TranslationKey),
+            }))} />
+          <SliderField label={t('ctl.us.children')} value={input.us.qualifyingChildren}
+            onChange={(v) => setUs({ qualifyingChildren: Math.round(v) })}
+            min={0} max={6} step={1} hint={t('ctl.us.children.hint')} />
+          <SliderField label={t('ctl.us.itemized')} value={input.us.itemizedDeduction}
+            onChange={(v) => setUs({ itemizedDeduction: v })}
+            min={0} max={100_000} step={500} suffix={region.currencySymbol} hint={t('ctl.us.itemized.hint')} />
+          <SliderField label={t('ctl.us.pretax')} value={input.us.pretaxRetirementRate}
+            onChange={(v) => setUs({ pretaxRetirementRate: v })}
+            min={0} max={0.5} step={0.005} scale={100} decimals={1} suffix="%"
+            hint={t('ctl.us.pretax.hint', { limit: fmt.money(ELECTIVE_DEFERRAL_LIMIT) })} />
+          <SliderField label={t('ctl.us.match')} value={input.us.employerMatchRate}
+            onChange={(v) => setUs({ employerMatchRate: v })}
+            min={0} max={0.2} step={0.005} scale={100} decimals={1} suffix="%" />
+        </fieldset>
+      )}
+
+      {code === 'CA' && (
+        <fieldset className="group">
+          <legend>{t('ctl.group.caTax')}</legend>
+          <SelectField label={t('ctl.ca.filing')} value={input.ca.filingStatus}
+            onChange={(v) => setCa({ filingStatus: v })}
+            options={(['single', 'married'] as const).map((v) => ({
+              value: v, label: t(`ctl.ca.filing.${v}` as TranslationKey),
+            }))} />
+          <SliderField label={t('ctl.ca.rrsp')} value={input.ca.rrspRate}
+            onChange={(v) => setCa({ rrspRate: v })}
+            min={0} max={0.3} step={0.005} scale={100} decimals={1} suffix="%"
+            hint={t('ctl.ca.rrsp.hint', { limit: fmt.money(RRSP_DOLLAR_LIMIT) })} />
+          <SliderField label={t('ctl.ca.match')} value={input.ca.employerMatchRate}
+            onChange={(v) => setCa({ employerMatchRate: v })}
+            min={0} max={0.2} step={0.005} scale={100} decimals={1} suffix="%" />
+          <SliderField label={t('ctl.ca.credit')} value={input.ca.otherCreditBase}
+            onChange={(v) => setCa({ otherCreditBase: v })}
+            min={0} max={50_000} step={500} suffix={region.currencySymbol} hint={t('ctl.ca.credit.hint')} />
+        </fieldset>
+      )}
 
       <fieldset className="group">
-        <legend>支出</legend>
-        <SliderField label="每月生活费" value={input.expense.monthlySpend} onChange={(v) => setExpense({ monthlySpend: v })}
-          min={1000} max={100000} step={100} suffix="元" />
-        <SliderField label="开销年增长率" value={input.expense.annualGrowthRate} onChange={(v) => setExpense({ annualGrowthRate: v })}
+        <legend>{t('ctl.group.expense')}</legend>
+        <SliderField label={t('ctl.spend')} value={input.expense.monthlySpend} onChange={(v) => setExpense({ monthlySpend: v })}
+          min={0} max={SPEND_MAX[code]} step={STEP[code]} suffix={region.currencySymbol} />
+        <SliderField label={t('ctl.spendGrowth')} value={input.expense.annualGrowthRate} onChange={(v) => setExpense({ annualGrowthRate: v })}
           min={0} max={0.15} step={0.005} scale={100} decimals={1} suffix="%" />
       </fieldset>
 
       <fieldset className="group">
-        <legend>公积金</legend>
-        <SliderField label="每月提取" value={input.housingFund.monthlyWithdrawal} onChange={(v) => setHF({ monthlyWithdrawal: v })}
-          min={0} max={20000} step={100} suffix="元"
-          hint="须符合当地提取政策；账户余额不足时模型会自动下调" />
-        <SliderField label="账户结息年利率" value={input.housingFund.annualInterestRate} onChange={(v) => setHF({ annualInterestRate: v })}
-          min={0} max={0.05} step={0.001} scale={100} decimals={2} suffix="%" hint="现行为 1.5%" />
-        <CheckboxField label="提取出的公积金也投入市场" checked={input.housingFund.investWithdrawal}
-          onChange={(v) => setHF({ investWithdrawal: v })} />
+        <legend>{t('ctl.group.plan', { plan: planName })}</legend>
+        {region.planWithdrawable ? (
+          <>
+            <SliderField label={t('ctl.plan.withdrawal')} value={input.employerPlan.monthlyWithdrawal}
+              onChange={(v) => setPlan({ monthlyWithdrawal: v })}
+              min={0} max={20_000} step={100} suffix={region.currencySymbol} hint={t('ctl.plan.withdrawal.hint')} />
+            <SliderField label={t('ctl.plan.interest')} value={input.employerPlan.annualInterestRate}
+              onChange={(v) => setPlan({ annualInterestRate: v })}
+              min={0} max={0.05} step={0.001} scale={100} decimals={2} suffix="%" hint={t('ctl.plan.interest.hint')} />
+            <CheckboxField label={t('ctl.plan.invest')} checked={input.employerPlan.investWithdrawal}
+              onChange={(v) => setPlan({ investWithdrawal: v })} />
+          </>
+        ) : (
+          // 401(k) / RRSP 的缴纳比例在各自的税务分区里设置，这里只说明账户行为
+          <p className="hint" style={{ marginTop: 0 }}>{t('ctl.plan.marketNote', { plan: planName })}</p>
+        )}
       </fieldset>
 
       <fieldset className="group">
-        <legend>投资</legend>
-        <SliderField label="初始本金" value={input.investment.initialCapital} onChange={(v) => setInv({ initialCapital: v })}
-          min={0} max={5000000} step={5000} suffix="元" />
-        <SliderField label="投资年限" value={input.investment.years} onChange={(v) => setInv({ years: Math.round(v) })}
-          min={1} max={50} step={1} suffix="年" />
-        <SliderField label="预期年化收益" value={input.investment.expectedAnnualReturn} onChange={(v) => setInv({ expectedAnnualReturn: v })}
-          min={0} max={0.2} step={0.005} scale={100} decimals={1} suffix="%"
-          hint="情景假设，不是收益承诺" />
-        <SliderField label="年化波动率" value={input.investment.annualVolatility} onChange={(v) => setInv({ annualVolatility: v })}
-          min={0} max={0.5} step={0.01} scale={100} decimals={0} suffix="%"
-          hint="标普 500 长期约 15–18%。这个值决定扇形区间有多宽。" />
-        <SliderField label="基金费率" value={input.investment.feeDragAnnual} onChange={(v) => setInv({ feeDragAnnual: v })}
-          min={0} max={0.03} step={0.001} scale={100} decimals={2} suffix="%"
-          hint="QDII 通常 0.6–1.5%" />
-        <SliderField label="股息率" value={input.investment.dividendYield} onChange={(v) => setInv({ dividendYield: v })}
+        <legend>{t('ctl.group.investment')}</legend>
+        <SliderField label={t('ctl.initialCapital')} value={input.investment.initialCapital} onChange={(v) => setInv({ initialCapital: v })}
+          min={0} max={CAPITAL_MAX[code]} step={STEP[code] * 50} suffix={region.currencySymbol} />
+        <SliderField label={t('ctl.years')} value={input.investment.years} onChange={(v) => setInv({ years: Math.round(v) })}
+          min={1} max={50} step={1} suffix={t('unit.year')} />
+        <SliderField label={t('ctl.return')} value={input.investment.expectedAnnualReturn} onChange={(v) => setInv({ expectedAnnualReturn: v })}
+          min={0} max={0.2} step={0.005} scale={100} decimals={1} suffix="%" hint={t('ctl.return.hint')} />
+        <SliderField label={t('ctl.volatility')} value={input.investment.annualVolatility} onChange={(v) => setInv({ annualVolatility: v })}
+          min={0} max={0.5} step={0.01} scale={100} decimals={0} suffix="%" hint={t('ctl.volatility.hint')} />
+        <SliderField label={t('ctl.fee')} value={input.investment.feeDragAnnual} onChange={(v) => setInv({ feeDragAnnual: v })}
+          min={0} max={0.03} step={0.0001} scale={100} decimals={2} suffix="%" hint={t('ctl.fee.hint')} />
+        <SliderField label={t('ctl.dividend')} value={input.investment.dividendYield} onChange={(v) => setInv({ dividendYield: v })}
           min={0} max={0.06} step={0.001} scale={100} decimals={2} suffix="%" />
-        <SliderField label="股息预扣税率" value={input.investment.dividendWithholdingTax} onChange={(v) => setInv({ dividendWithholdingTax: v })}
-          min={0} max={0.4} step={0.01} scale={100} decimals={0} suffix="%"
-          hint="中国投资者持有美股 ETF 通常预扣 10%" />
-        <SliderField label="可投金额的投入比例" value={input.investment.investRatio} onChange={(v) => setInv({ investRatio: v })}
-          min={0} max={1} step={0.05} scale={100} decimals={0} suffix="%"
-          hint="其余留作现金，不参与市场波动" />
+        <SliderField label={t('ctl.withholding')} value={input.investment.dividendWithholdingTax} onChange={(v) => setInv({ dividendWithholdingTax: v })}
+          min={0} max={0.4} step={0.01} scale={100} decimals={0} suffix="%" hint={t('ctl.withholding.hint')} />
+        <SliderField label={t('ctl.investRatio')} value={input.investment.investRatio} onChange={(v) => setInv({ investRatio: v })}
+          min={0} max={1} step={0.05} scale={100} decimals={0} suffix="%" hint={t('ctl.investRatio.hint')} />
       </fieldset>
 
       <fieldset className="group">
-        <legend>通胀</legend>
-        <SliderField label="通胀年率" value={input.inflation.annualRate} onChange={(v) => onChange({ ...input, inflation: { annualRate: v } })}
-          min={0} max={0.15} step={0.005} scale={100} decimals={1} suffix="%"
-          hint="用于把名义金额折算成今天的购买力" />
+        <legend>{t('ctl.group.inflation')}</legend>
+        <SliderField label={t('ctl.inflation')} value={input.inflation.annualRate}
+          onChange={(v) => onChange({ ...input, inflation: { annualRate: v } })}
+          min={0} max={0.15} step={0.005} scale={100} decimals={1} suffix="%" hint={t('ctl.inflation.hint')} />
       </fieldset>
     </section>
   );

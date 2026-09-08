@@ -10,12 +10,13 @@ import { z } from 'zod';
 const rate = (max: number) => z.number().min(-1).max(max);
 const money = z.number().min(0).max(1_000_000_000).finite();
 
-export const salaryStepSchema = z.object({
-  atYear: z.number().int().min(1).max(60),
-  newMonthlySalary: money,
-});
+export const REGION_CODES = ['CN', 'US', 'CA'] as const;
+export const regionCodeSchema = z.enum(REGION_CODES);
+export type RegionCodeDTO = z.infer<typeof regionCodeSchema>;
 
-export const specialDeductionsSchema = z.object({
+/* ------------------------------------------------------------ 地区特有 */
+
+export const cnSpecialDeductionsSchema = z.object({
   childrenCount: z.number().int().min(0).max(10),
   infantCount: z.number().int().min(0).max(10),
   continuingEducation: z.enum(['none', 'degree', 'vocational']),
@@ -25,13 +26,46 @@ export const specialDeductionsSchema = z.object({
   elderlyShareAmount: z.number().min(0).max(1_500).optional(),
 });
 
+export const cnParamsSchema = z.object({
+  allowSeparateBonusTax: z.boolean(),
+  deductions: cnSpecialDeductionsSchema,
+});
+
+export const usFilingStatusSchema = z.enum([
+  'single',
+  'married-joint',
+  'married-separate',
+  'head-of-household',
+]);
+
+export const usParamsSchema = z.object({
+  filingStatus: usFilingStatusSchema,
+  qualifyingChildren: z.number().int().min(0).max(10),
+  itemizedDeduction: money,
+  pretaxRetirementRate: z.number().min(0).max(1),
+  employerMatchRate: z.number().min(0).max(0.5),
+});
+
+export const caParamsSchema = z.object({
+  filingStatus: z.enum(['single', 'married']),
+  rrspRate: z.number().min(0).max(1),
+  employerMatchRate: z.number().min(0).max(0.5),
+  otherCreditBase: money,
+});
+
+/* ------------------------------------------------------------ 通用 */
+
+export const salaryStepSchema = z.object({
+  atYear: z.number().int().min(1).max(60),
+  newMonthlySalary: money,
+});
+
 export const incomeSchema = z.object({
   monthlySalary: money,
   salaryMonths: z.number().min(12).max(24),
-  mealAllowance: money,
+  taxFreeAllowance: money,
   annualGrowthRate: rate(1),
   salarySteps: z.array(salaryStepSchema).max(20),
-  deductions: specialDeductionsSchema,
 });
 
 export const expenseSchema = z.object({
@@ -39,7 +73,7 @@ export const expenseSchema = z.object({
   annualGrowthRate: rate(1),
 });
 
-export const housingFundSchema = z.object({
+export const employerPlanSchema = z.object({
   monthlyWithdrawal: money,
   annualInterestRate: rate(0.2),
   investWithdrawal: z.boolean(),
@@ -65,24 +99,28 @@ export const overridesSchema = z
     socialBaseMin: money.optional(),
     socialBaseMax: money.optional(),
     socialRateSelf: z.number().min(0).max(0.5).optional(),
-    housingFundBaseMin: money.optional(),
-    housingFundBaseMax: money.optional(),
-    housingFundRateSelf: z.number().min(0).max(0.3).optional(),
-    housingFundRateEmployer: z.number().min(0).max(0.3).optional(),
+    planBaseMin: money.optional(),
+    planBaseMax: money.optional(),
+    planRateSelf: z.number().min(0).max(0.3).optional(),
+    planRateEmployer: z.number().min(0).max(0.3).optional(),
   })
   .optional();
 
 export const projectionInputSchema = z
   .object({
-    region: z.literal('CN'),
-    city: z.string().min(1).max(40),
-    allowSeparateBonusTax: z.boolean(),
+    region: regionCodeSchema,
+    /** 城市（中国）/ 州（美国）/ 省（加拿大）的 code */
+    jurisdiction: z.string().min(1).max(40),
     income: incomeSchema,
     expense: expenseSchema,
-    housingFund: housingFundSchema,
+    employerPlan: employerPlanSchema,
     investment: investmentSchema,
     inflation: inflationSchema,
     overrides: overridesSchema,
+    // 三个地区的参数同时保留，切换国家时不丢设置
+    cn: cnParamsSchema,
+    us: usParamsSchema,
+    ca: caParamsSchema,
   })
   .superRefine((v, ctx) => {
     if (v.overrides?.socialBaseMin !== undefined && v.overrides.socialBaseMax !== undefined) {
@@ -94,10 +132,10 @@ export const projectionInputSchema = z
         });
       }
     }
-    if (v.income.deductions.elderlyCare === 'shared' && v.income.deductions.elderlyShareAmount === undefined) {
+    if (v.cn.deductions.elderlyCare === 'shared' && v.cn.deductions.elderlyShareAmount === undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['income', 'deductions', 'elderlyShareAmount'],
+        path: ['cn', 'deductions', 'elderlyShareAmount'],
         message: '非独生子女需要填写每月分摊金额',
       });
     }

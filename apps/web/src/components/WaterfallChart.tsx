@@ -1,6 +1,9 @@
 import { useState } from 'react';
-import { money, niceTicks, plain } from '../lib/format.js';
+import type { RegionCode } from '@pmp/engine';
+import { niceTicks } from '../lib/format.js';
+import { useFormat } from '../hooks/useFormat.js';
 import { useMeasure } from '../hooks/useMeasure.js';
+import { useI18n } from '../i18n/index.js';
 
 export type StepKind = 'total' | 'increase' | 'decrease' | 'result';
 
@@ -28,9 +31,11 @@ const FILL: Record<StepKind, string> = {
  * 每根柱都带可见数值直标——既是易读性需要，也是浅色模式下
  * aqua 对比度 2.74 未达 3:1 所要求的补偿手段。
  */
-export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
+export function WaterfallChart({ steps, region }: { steps: WaterfallStep[]; region: RegionCode }) {
   const [ref, width] = useMeasure<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  const { t } = useI18n();
+  const fmt = useFormat(region);
 
   const innerW = Math.max(120, width - PAD.l - PAD.r);
   const innerH = HEIGHT - PAD.t - PAD.b;
@@ -62,13 +67,13 @@ export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
         width={width}
         height={HEIGHT}
         role="img"
-        aria-label="每月现金流从税前收入到可投金额的分解"
+        aria-label={t('waterfall.aria')}
       >
-        {ticks.map((t, i) => (
+        {ticks.map((tick, i) => (
           <g key={i}>
-            <line x1={PAD.l} x2={PAD.l + innerW} y1={yScale(t)} y2={yScale(t)} stroke="var(--gridline)" strokeWidth={1} />
-            <text x={PAD.l - 8} y={yScale(t) + 4} textAnchor="end" fontSize={11} fill="var(--text-muted)">
-              {plain(t)}
+            <line x1={PAD.l} x2={PAD.l + innerW} y1={yScale(tick)} y2={yScale(tick)} stroke="var(--gridline)" strokeWidth={1} />
+            <text x={PAD.l - 8} y={yScale(tick) + 4} textAnchor="end" fontSize={11} fill="var(--text-muted)">
+              {fmt.plain(tick)}
             </text>
           </g>
         ))}
@@ -104,7 +109,7 @@ export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
               {/* 直标：数值在柱顶，标签在轴下 */}
               <text x={cx(i)} y={top - 7} textAnchor="middle" fontSize={11} fill="var(--text-primary)" fontVariant="tabular-nums">
                 {b.kind === 'decrease' ? '−' : ''}
-                {plain(Math.abs(b.value))}
+                {fmt.plain(Math.abs(b.value))}
               </text>
               <text x={cx(i)} y={HEIGHT - 24} textAnchor="middle" fontSize={11} fill="var(--text-secondary)">
                 {b.label}
@@ -123,13 +128,19 @@ export function WaterfallChart({ steps }: { steps: WaterfallStep[] }) {
         >
           <div className="t-title">{bars[hover]!.label}</div>
           <div className="t-row">
-            <span>{bars[hover]!.kind === 'decrease' ? '扣减' : bars[hover]!.kind === 'increase' ? '增加' : '小计'}</span>
+            <span>
+              {bars[hover]!.kind === 'decrease'
+                ? t('waterfall.tooltip.decrease')
+                : bars[hover]!.kind === 'increase'
+                  ? t('waterfall.tooltip.increase')
+                  : t('waterfall.tooltip.subtotal')}
+            </span>
             <strong>
               {bars[hover]!.kind === 'decrease' ? '−' : ''}
-              {money(Math.abs(bars[hover]!.value))}
+              {fmt.money(Math.abs(bars[hover]!.value))}
             </strong>
           </div>
-          <div className="t-row"><span>累计余额</span><strong>{money(bars[hover]!.to)}</strong></div>
+          <div className="t-row"><span>{t('waterfall.tooltip.running')}</span><strong>{fmt.money(bars[hover]!.to)}</strong></div>
         </div>
       )}
     </div>

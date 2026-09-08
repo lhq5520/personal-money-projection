@@ -88,6 +88,9 @@ model Verification {
 
 /// 一套完整的财务假设。选择关系化明文存储（而非加密 blob），
 /// 换来的是服务端可查询、可聚合、可跨方案对比的能力。
+///
+/// 三个地区的参数同时持久化：切换国家时不会丢掉另一边已填好的设置，
+/// 这与前端的行为一致。与当前 region 不匹配的那几列只是暂时不参与计算。
 model Scenario {
   id     String  @id @default(cuid())
   userId String
@@ -95,35 +98,27 @@ model Scenario {
   name   String
   note   String?
 
-  region                String  @default("CN")
-  city                  String  @default("shanghai")
-  /// 年终奖单独计税政策是否仍然有效（现行政策延续至 2027-12-31）
-  allowSeparateBonusTax Boolean @default(true)
+  /// CN | US | CA
+  region       String @default("CN")
+  /// 城市（中国）/ 州（美国）/ 省（加拿大）的 code
+  jurisdiction String @default("shanghai")
 
-  // ---- 收入 ----
+  // ---- 收入（与国别无关）----
   monthlySalary    Decimal @db.Decimal(16, 2)
-  /// 全年薪数，允许 13.5 这类非整数，故用 Decimal
+  /// 全年薪数，允许 13.5 这类非整数，故用 Decimal。超出 12 的部分视作一次性奖金
   salaryMonths     Decimal @db.Decimal(5, 2)
-  mealAllowance    Decimal @db.Decimal(16, 2)
+  /// 每月免税补贴（中国的餐补等）
+  taxFreeAllowance Decimal @db.Decimal(16, 2)
   salaryGrowthRate Decimal @db.Decimal(8, 6)
-
-  // ---- 专项附加扣除 ----
-  childrenCount       Int      @default(0)
-  infantCount         Int      @default(0)
-  continuingEducation String   @default("none") // none | degree | vocational
-  housingType         String   @default("none") // none | loan | rent（贷款与租金互斥）
-  rentTier            String? // tier1 | tier2 | tier3
-  elderlyCare         String   @default("none") // none | only-child | shared
-  elderlyShareAmount  Decimal? @db.Decimal(16, 2)
 
   // ---- 支出 ----
   monthlySpend    Decimal @db.Decimal(16, 2)
   spendGrowthRate Decimal @db.Decimal(8, 6)
 
-  // ---- 公积金 ----
-  hfMonthlyWithdrawal  Decimal @db.Decimal(16, 2)
-  hfAnnualInterestRate Decimal @db.Decimal(8, 6)
-  hfInvestWithdrawal   Boolean @default(true)
+  // ---- 雇主储蓄计划（公积金 / 401(k) / RRSP 的通用部分）----
+  planMonthlyWithdrawal  Decimal @db.Decimal(16, 2)
+  planAnnualInterestRate Decimal @db.Decimal(8, 6)
+  planInvestWithdrawal   Boolean @default(true)
 
   // ---- 投资 ----
   initialCapital         Decimal @db.Decimal(16, 2)
@@ -138,14 +133,37 @@ model Scenario {
   // ---- 通胀 ----
   inflationRate Decimal @db.Decimal(8, 6)
 
-  // ---- 缴费参数覆盖（工资条与城市默认值对不上时使用，全部可空）----
-  ovSocialBaseMin  Decimal? @db.Decimal(16, 2)
-  ovSocialBaseMax  Decimal? @db.Decimal(16, 2)
-  ovSocialRateSelf Decimal? @db.Decimal(8, 6)
-  ovHfBaseMin      Decimal? @db.Decimal(16, 2)
-  ovHfBaseMax      Decimal? @db.Decimal(16, 2)
-  ovHfRateSelf     Decimal? @db.Decimal(8, 6)
-  ovHfRateEmployer Decimal? @db.Decimal(8, 6)
+  // ---- 中国：年终奖计税 + 专项附加扣除 ----
+  cnAllowSeparateBonusTax Boolean  @default(true)
+  cnChildrenCount         Int      @default(0)
+  cnInfantCount           Int      @default(0)
+  cnContinuingEducation   String   @default("none") // none | degree | vocational
+  cnHousingType           String   @default("none") // none | loan | rent（互斥）
+  cnRentTier              String? // tier1 | tier2 | tier3
+  cnElderlyCare           String   @default("none") // none | only-child | shared
+  cnElderlyShareAmount    Decimal? @db.Decimal(16, 2)
+
+  // ---- 美国：申报身份 + 401(k) ----
+  usFilingStatus         String  @default("single")
+  usQualifyingChildren   Int     @default(0)
+  usItemizedDeduction    Decimal @default(0) @db.Decimal(16, 2)
+  usPretaxRetirementRate Decimal @default(0.06) @db.Decimal(8, 6)
+  usEmployerMatchRate    Decimal @default(0.04) @db.Decimal(8, 6)
+
+  // ---- 加拿大：申报身份 + RRSP ----
+  caFilingStatus      String  @default("single")
+  caRrspRate          Decimal @default(0.06) @db.Decimal(8, 6)
+  caEmployerMatchRate Decimal @default(0.03) @db.Decimal(8, 6)
+  caOtherCreditBase   Decimal @default(0) @db.Decimal(16, 2)
+
+  // ---- 缴费参数覆盖（工资条与默认值对不上时使用，全部可空）----
+  ovSocialBaseMin    Decimal? @db.Decimal(16, 2)
+  ovSocialBaseMax    Decimal? @db.Decimal(16, 2)
+  ovSocialRateSelf   Decimal? @db.Decimal(8, 6)
+  ovPlanBaseMin      Decimal? @db.Decimal(16, 2)
+  ovPlanBaseMax      Decimal? @db.Decimal(16, 2)
+  ovPlanRateSelf     Decimal? @db.Decimal(8, 6)
+  ovPlanRateEmployer Decimal? @db.Decimal(8, 6)
 
   salarySteps SalaryStep[]
 
@@ -155,6 +173,7 @@ model Scenario {
   /// 同一用户下方案名唯一，避免存出两个「基准方案」
   @@unique([userId, name])
   @@index([userId, updatedAt])
+  @@index([userId, region])
   @@map("scenario")
 }
 

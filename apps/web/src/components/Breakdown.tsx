@@ -1,5 +1,6 @@
-import type { ProjectionResult } from '@pmp/engine';
-import { money, percent } from '../lib/format.js';
+import { getRegion, type ProjectionResult } from '@pmp/engine';
+import { useFormat } from '../hooks/useFormat.js';
+import { taxLayerKey, useI18n, type TranslationKey } from '../i18n/index.js';
 
 const Line = ({ k, v, title }: { k: string; v: string; title?: string }) => (
   <div className="row-line" title={title}>
@@ -9,43 +10,73 @@ const Line = ({ k, v, title }: { k: string; v: string; title?: string }) => (
 );
 
 export function Breakdown({ result }: { result: ProjectionResult }) {
+  const { t } = useI18n();
+  const fmt = useFormat(result.input.region);
+  const region = getRegion(result.input.region);
+
   const y1 = result.years[0];
   const last = result.years[result.years.length - 1];
   const m1 = result.months[0];
   if (!y1 || !last || !m1) return null;
 
-  const strategyLabel = y1.bonusTaxStrategy === 'separate' ? '单独计税' : '并入综合所得';
+  const planName = t(`plan.${y1.planCode}` as TranslationKey);
+  const years = result.input.investment.years;
 
   return (
     <div className="two-col">
       <div className="panel">
-        <h3>首年税务明细</h3>
+        <h3>{t('breakdown.tax.title')}</h3>
         <div className="rows">
-          <Line k="全年税前总收入" v={money(y1.grossAnnual)} />
-          <Line k="其中年终奖" v={money(y1.bonus)} />
-          <Line k="五险一金个人部分" v={money(y1.socialInsuranceAnnual + y1.housingFundSelfAnnual)} />
-          <Line k="专项附加扣除" v={money(y1.specialDeductionAnnual)} title="原型页面完全没有这一项" />
-          <Line k="基本减除费用" v={money(60000)} />
-          <Line k="全年个税" v={money(y1.taxAnnual)} />
-          <Line k="实际税负率" v={percent(y1.effectiveTaxRate)} />
-          <Line k="年终奖计税方式" v={strategyLabel} />
-          {y1.bonusTaxSaving > 0 && (
-            <Line k="择优省下" v={money(y1.bonusTaxSaving)} title="相比另一种计税方式" />
+          <Line k={t('breakdown.gross')} v={fmt.money(y1.grossAnnual)} />
+          {y1.bonus > 0 && <Line k={t('breakdown.bonus')} v={fmt.money(y1.bonus)} />}
+
+          {/* 强制缴款逐项列出：中国是养老/医疗/失业，美国是 FICA 各项，加拿大是 CPP/EI */}
+          {y1.socialBreakdown.map((b) => (
+            <Line key={b.code} k={t(`contrib.${b.code}` as TranslationKey)} v={fmt.money(b.amount)} />
+          ))}
+          <Line k={t('breakdown.social')} v={fmt.money(y1.socialInsuranceAnnual)} />
+
+          <Line k={t('breakdown.deduction')} v={fmt.money(y1.deductionAnnual)} />
+          <Line k={t('breakdown.taxable')} v={fmt.money(y1.taxableAnnual)} />
+
+          {/* 所得税分层列出：联邦 / 州省 / 地方 / 附加税 / 抵免 */}
+          {y1.taxBreakdown.map((c) => (
+            <Line
+              key={c.code}
+              k={t(taxLayerKey(c.code, region.code))}
+              v={`${c.amount < 0 ? '−' : ''}${fmt.money(Math.abs(c.amount))}`}
+            />
+          ))}
+          <Line k={t('breakdown.tax')} v={fmt.money(y1.taxAnnual)} />
+          <Line k={t('breakdown.effectiveRate')} v={fmt.percent(y1.effectiveTaxRate)} />
+          <Line k={t('breakdown.burdenRate')} v={fmt.percent(y1.totalBurdenRate)} />
+
+          {y1.bonusTaxStrategy && (
+            <Line
+              k={t('breakdown.bonusStrategy')}
+              v={t(`breakdown.bonusStrategy.${y1.bonusTaxStrategy}` as TranslationKey)}
+            />
+          )}
+          {y1.bonusTaxSaving !== undefined && y1.bonusTaxSaving > 0 && (
+            <Line k={t('breakdown.bonusSaving')} v={fmt.money(y1.bonusTaxSaving)} />
           )}
         </div>
       </div>
 
       <div className="panel">
-        <h3>公积金与长期口径</h3>
+        <h3>{planName} · {t('breakdown.plan.title')}</h3>
         <div className="rows">
-          <Line k="个人每月缴存" v={money(m1.housingFundSelf)} />
-          <Line k="公司每月缴存" v={money(m1.housingFundEmployer)} />
-          <Line k="每月实际提取" v={money(m1.housingFundWithdrawal)} title="受账户余额约束，可能低于设定值" />
-          <Line k={`${result.input.investment.years} 年后账户余额`} v={money(result.summary.finalHousingFundBalance)} title="含 1.5% 结息" />
-          <Line k="末年月薪" v={money(last.monthlySalary)} />
-          <Line k="末年月均到手" v={money(last.avgMonthlyNet)} />
-          <Line k="累计已缴个税" v={money(result.summary.totalTaxPaid)} />
-          <Line k="扣除费用后的净年化" v={percent(result.summary.netAnnualReturn, 2)} title="名义年化 − 基金费率 − 股息预扣税拖累" />
+          <Line k={t('breakdown.plan.self')} v={fmt.money(m1.planSelf)} />
+          <Line k={t('breakdown.plan.employer')} v={fmt.money(m1.planEmployer)} />
+          {region.planWithdrawable && (
+            <Line k={t('breakdown.plan.withdrawal')} v={fmt.money(m1.planWithdrawal)} />
+          )}
+          <Line k={t('breakdown.plan.balance', { years })} v={fmt.money(result.summary.finalPlanBalance)} />
+          <Line k={t('breakdown.plan.totalWealth')} v={fmt.money(result.summary.finalTotalWealth)} />
+          <Line k={t('breakdown.lastSalary')} v={fmt.money(last.monthlySalary)} />
+          <Line k={t('breakdown.lastNet')} v={fmt.money(last.avgMonthlyNet)} />
+          <Line k={t('breakdown.totalTax')} v={fmt.money(result.summary.totalTaxPaid)} />
+          <Line k={t('breakdown.netReturn')} v={fmt.percent(result.summary.netAnnualReturn, 2)} />
         </div>
       </div>
     </div>

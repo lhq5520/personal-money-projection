@@ -1,28 +1,53 @@
-/** 金额与比率的展示格式。图表轴、指标卡、表格共用，避免同一个数字在三处显示成三种样子。 */
-
-const nf = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 });
-const nf1 = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 });
-
-export const money = (n: number): string => `¥${nf.format(Math.round(n))}`;
-
-/** 带千分位的裸数字，用于金额本身就在千元量级、缩写反而丢精度的场合 */
-export const plain = (n: number): string => nf.format(Math.round(n));
-
 /**
- * 轴标签用的紧凑写法。
+ * 金额与比率的展示格式。
  *
- * 万位保留一位小数：否则 18250 和 15003 会同时显示成「2万」，
- * 在现金流瀑布这种相邻柱高度接近的图里会直接误导读者。
+ * 货币符号与数字分组由地区决定（¥ / $ / C$），紧凑写法由语言决定
+ * （中文用万/亿，英文用 K/M/B）——两者是正交的：一个中国用户可以用英文界面看人民币。
  */
-export function compactMoney(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1e8) return `${nf1.format(n / 1e8)}亿`;
-  if (abs >= 1e7) return `${nf.format(n / 1e4)}万`;
-  if (abs >= 1e4) return `${nf1.format(n / 1e4)}万`;
-  return nf.format(n);
+
+import type { RegionModule } from '@pmp/engine';
+import type { Lang } from '../i18n/index.js';
+
+export interface Formatter {
+  /** 带货币符号的完整金额 */
+  money(n: number): string;
+  /** 带千分位的裸数字，用于金额本身就在千元量级、缩写反而丢精度的场合 */
+  plain(n: number): string;
+  /** 坐标轴用的紧凑写法 */
+  compact(n: number): string;
+  percent(r: number, digits?: number): string;
 }
 
-export const percent = (r: number, digits = 1): string => `${(r * 100).toFixed(digits)}%`;
+export function makeFormatter(region: RegionModule, lang: Lang): Formatter {
+  const locale = region.numberLocale;
+  const nf = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+  const nf1 = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+  const sym = region.currencySymbol;
+
+  const compactZh = (n: number): string => {
+    const abs = Math.abs(n);
+    if (abs >= 1e8) return `${nf1.format(n / 1e8)}亿`;
+    if (abs >= 1e7) return `${nf.format(n / 1e4)}万`;
+    // 万位保留一位小数：否则 18250 和 15003 会同时显示成「2万」，在相邻柱高度接近的图里会误导
+    if (abs >= 1e4) return `${nf1.format(n / 1e4)}万`;
+    return nf.format(n);
+  };
+
+  const compactEn = (n: number): string => {
+    const abs = Math.abs(n);
+    if (abs >= 1e9) return `${nf1.format(n / 1e9)}B`;
+    if (abs >= 1e6) return `${nf1.format(n / 1e6)}M`;
+    if (abs >= 1e4) return `${nf.format(n / 1e3)}K`;
+    return nf.format(n);
+  };
+
+  return {
+    money: (n) => `${sym}${nf.format(Math.round(n))}`,
+    plain: (n) => nf.format(Math.round(n)),
+    compact: lang === 'zh' ? compactZh : compactEn,
+    percent: (r, digits = 1) => `${(r * 100).toFixed(digits)}%`,
+  };
+}
 
 /**
  * 生成「好看」的坐标轴刻度（步长为 1/2/2.5/5 × 10ⁿ）。

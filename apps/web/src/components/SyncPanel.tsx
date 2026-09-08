@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ProjectionInputDTO, ScenarioDTO } from '@pmp/shared';
 import { authClient, useSession } from '../lib/auth-client.js';
+import { useI18n } from '../i18n/index.js';
 import { ApiError, scenarioApi } from '../lib/api.js';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
  * 后端不可达时也只降级为「离线」，绝不阻塞主流程。
  */
 export function SyncPanel({ input, onLoad }: Props) {
+  const { t } = useI18n();
   const { data: session, isPending } = useSession();
   const [scenarios, setScenarios] = useState<ScenarioDTO[]>([]);
   const [name, setName] = useState('');
@@ -29,7 +31,7 @@ export function SyncPanel({ input, onLoad }: Props) {
       setScenarios(await scenarioApi.list());
     } catch (e) {
       if (!(e instanceof ApiError && e.isUnauthorized)) {
-        setMessage({ kind: 'error', text: '无法读取云端方案，已继续使用本地数据' });
+        setMessage({ kind: 'error', text: t('sync.loadFailed') });
       }
     }
   }, []);
@@ -45,11 +47,11 @@ export function SyncPanel({ input, onLoad }: Props) {
     setMessage(null);
     const res =
       mode === 'sign-up'
-        ? await authClient.signUp.email({ email, password, name: email.split('@')[0] ?? '用户' })
+        ? await authClient.signUp.email({ email, password, name: email.split('@')[0] ?? 'user' })
         : await authClient.signIn.email({ email, password });
     setBusy(false);
     if (res.error) {
-      setMessage({ kind: 'error', text: res.error.message ?? '认证失败' });
+      setMessage({ kind: 'error', text: res.error.message ?? t('sync.authFailed') });
     } else {
       setPassword('');
     }
@@ -64,20 +66,20 @@ export function SyncPanel({ input, onLoad }: Props) {
       const existing = scenarios.find((s) => s.name === trimmed);
       if (existing) {
         await scenarioApi.update(existing.id, { input, expectedUpdatedAt: existing.updatedAt });
-        setMessage({ kind: 'ok', text: `已更新「${trimmed}」` });
+        setMessage({ kind: 'ok', text: t('sync.updated', { name: trimmed }) });
       } else {
         await scenarioApi.create(trimmed, input);
-        setMessage({ kind: 'ok', text: `已保存「${trimmed}」` });
+        setMessage({ kind: 'ok', text: t('sync.saved', { name: trimmed }) });
       }
       await refresh();
     } catch (e) {
       // 冲突时把服务端最新版本摆出来，让用户自己决定保留哪份，而不是静默覆盖
       const text =
         e instanceof ApiError && e.isConflict
-          ? '该方案已在其他设备上被修改。请先「载入」看一眼云端版本，再决定是否覆盖。'
+          ? t('sync.conflict')
           : e instanceof ApiError
             ? e.message
-            : '保存失败';
+            : t('sync.saveFailed');
       setMessage({ kind: 'error', text });
     } finally {
       setBusy(false);
@@ -89,36 +91,35 @@ export function SyncPanel({ input, onLoad }: Props) {
     try {
       await scenarioApi.remove(s.id);
       await refresh();
-      setMessage({ kind: 'ok', text: `已删除「${s.name}」` });
+      setMessage({ kind: 'ok', text: t('sync.deleted', { name: s.name }) });
     } catch {
-      setMessage({ kind: 'error', text: '删除失败' });
+      setMessage({ kind: 'error', text: t('sync.deleteFailed') });
     } finally {
       setBusy(false);
     }
   };
 
-  if (isPending) return <div className="panel"><span className="muted">正在检查登录状态…</span></div>;
+  if (isPending) return <div className="panel"><span className="muted">{t('sync.checking')}</span></div>;
 
   if (!session?.user) {
     return (
       <div className="panel">
-        <h3>云端同步（可选）</h3>
+        <h3>{t('sync.titleAnon')}</h3>
         <p className="muted" style={{ margin: '0 0 12px' }}>
-          不登录也能完整使用：参数自动存在这台设备的浏览器里，也可以用「复制分享链接」把方案发给别人。
-          登录后可在多设备间同步方案。
+{t('sync.intro')}
         </p>
         <form onSubmit={handleAuth} className="stack" style={{ gap: 8 }}>
-          <input className="text-input" type="email" required placeholder="邮箱" autoComplete="email"
+          <input className="text-input" type="email" required placeholder={t('sync.email')} autoComplete="email"
             value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input className="text-input" type="password" required minLength={8} placeholder="密码（至少 8 位）"
+          <input className="text-input" type="password" required minLength={8} placeholder={t('sync.password')}
             autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'}
             value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="btn-row">
             <button className="primary" type="submit" disabled={busy}>
-              {mode === 'sign-up' ? '注册并登录' : '登录'}
+              {mode === 'sign-up' ? t('sync.signUp') : t('sync.signIn')}
             </button>
             <button type="button" onClick={() => setMode(mode === 'sign-up' ? 'sign-in' : 'sign-up')}>
-              {mode === 'sign-up' ? '已有账号？去登录' : '没有账号？去注册'}
+              {mode === 'sign-up' ? t('sync.toSignIn') : t('sync.toSignUp')}
             </button>
           </div>
         </form>
@@ -130,23 +131,23 @@ export function SyncPanel({ input, onLoad }: Props) {
   return (
     <div className="panel">
       <div className="chart-head">
-        <h3 style={{ margin: 0 }}>云端方案</h3>
+        <h3 style={{ margin: 0 }}>{t('sync.title')}</h3>
         <div className="btn-row">
           <span className="muted">{session.user.email}</span>
-          <button onClick={() => void authClient.signOut()}>登出</button>
+          <button onClick={() => void authClient.signOut()}>{t('sync.signOut')}</button>
         </div>
       </div>
 
       <div className="btn-row" style={{ marginBottom: 12 }}>
-        <input className="text-input" style={{ flex: 1, minWidth: 140 }} placeholder="方案名称，例如「基准」「跳槽 A」"
+        <input className="text-input" style={{ flex: 1, minWidth: 140 }} placeholder={t('sync.namePlaceholder')}
           value={name} onChange={(e) => setName(e.target.value)} />
         <button className="primary" onClick={() => void save()} disabled={busy || !name.trim()}>
-          保存当前参数
+          {t('sync.save')}
         </button>
       </div>
 
       {scenarios.length === 0 ? (
-        <p className="muted">还没有保存任何方案。</p>
+        <p className="muted">{t('sync.empty')}</p>
       ) : (
         <div className="rows">
           {scenarios.map((s) => (
@@ -156,8 +157,8 @@ export function SyncPanel({ input, onLoad }: Props) {
                 <span className="muted"> · {new Date(s.updatedAt).toLocaleString('zh-CN')}</span>
               </span>
               <span className="btn-row">
-                <button onClick={() => { onLoad(s.input); setName(s.name); }}>载入</button>
-                <button className="danger" onClick={() => void remove(s)} disabled={busy}>删除</button>
+                <button onClick={() => { onLoad(s.input); setName(s.name); }}>{t('sync.load')}</button>
+                <button className="danger" onClick={() => void remove(s)} disabled={busy}>{t('sync.delete')}</button>
               </span>
             </div>
           ))}

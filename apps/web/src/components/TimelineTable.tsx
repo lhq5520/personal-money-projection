@@ -1,5 +1,6 @@
 import type { MonteCarloResult, ProjectionResult } from '@pmp/engine';
-import { money } from '../lib/format.js';
+import { useFormat } from '../hooks/useFormat.js';
+import { useI18n } from '../i18n/index.js';
 import type { ValueMode } from './FanChart.js';
 
 /**
@@ -11,6 +12,8 @@ import type { ValueMode } from './FanChart.js';
 export function TimelineTable({
   result, mc, mode,
 }: { result: ProjectionResult; mc: MonteCarloResult | null; mode: ValueMode }) {
+  const { t } = useI18n();
+  const fmt = useFormat(result.input.region);
   const rate = result.input.inflation.annualRate;
   const adjust = (v: number, y: number) => (mode === 'real' ? v / Math.pow(1 + rate, y) : v);
 
@@ -18,28 +21,28 @@ export function TimelineTable({
     <div className="table-wrap">
       <table>
         <caption className="sr-only">
-          逐年的累计投入本金与账户价值分位数{mode === 'real' ? '（按今日购买力折算）' : '（名义金额）'}
+          {t('table.caption')} · {mode === 'real' ? t('mode.real') : t('mode.nominal')}
         </caption>
         <thead>
           <tr>
-            <th scope="col">年</th>
-            <th scope="col">累计投入</th>
+            <th scope="col">{t('table.year')}</th>
+            <th scope="col">{t('table.contribution')}</th>
             <th scope="col">P10</th>
             <th scope="col">P50</th>
             <th scope="col">P90</th>
           </tr>
         </thead>
         <tbody>
-          {result.timeline.map((t) => {
-            const pt = t.year === 0 ? null : mc?.byYear[t.year - 1];
+          {result.timeline.map((row) => {
+            const pt = row.year === 0 ? null : mc?.byYear[row.year - 1];
             const p = pt ? (mode === 'real' ? pt.real : pt) : null;
             return (
-              <tr key={t.year}>
-                <th scope="row">{t.year}</th>
-                <td>{money(adjust(t.contribution, t.year))}</td>
-                <td>{p ? money(p.p10) : '—'}</td>
-                <td>{p ? money(p.p50) : money(adjust(t.value, t.year))}</td>
-                <td>{p ? money(p.p90) : '—'}</td>
+              <tr key={row.year}>
+                <th scope="row">{row.year}</th>
+                <td>{fmt.money(adjust(row.contribution, row.year))}</td>
+                <td>{p ? fmt.money(p.p10) : '—'}</td>
+                <td>{p ? fmt.money(p.p50) : fmt.money(adjust(row.value, row.year))}</td>
+                <td>{p ? fmt.money(p.p90) : '—'}</td>
               </tr>
             );
           })}

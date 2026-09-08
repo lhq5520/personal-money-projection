@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { useI18n } from '../i18n/index.js';
 
 interface SliderProps {
   label: string;
@@ -25,6 +26,7 @@ export function SliderField({
   label, value, onChange, min, max, step, hint, suffix = '', scale = 1, decimals = 0,
 }: SliderProps) {
   const id = useId();
+  const { t } = useI18n();
   const display = value * scale;
   // 输入过程中保留用户的原始文本，否则「1」在输入「14600」的途中就会被夹到 min
   const [draft, setDraft] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function SliderField({
             className="field-input"
             type="number"
             inputMode="decimal"
-            aria-label={`${label}（精确值）`}
+            aria-label={t('field.exactAria', { label })}
             value={draft ?? display.toFixed(decimals)}
             step={step * scale}
             onChange={(e) => setDraft(e.target.value)}

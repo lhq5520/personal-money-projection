@@ -81,38 +81,38 @@ describe('端到端投影', () => {
   });
 
   it('公积金余额始终非负，且提取额不超过账户可用余额', () => {
-    const r = projectTimeline(withInput((i) => { i.housingFund.monthlyWithdrawal = 999_999; }));
+    const r = projectTimeline(withInput((i) => { i.employerPlan.monthlyWithdrawal = 999_999; }));
     for (const m of r.months) {
-      expect(m.housingFundBalance).toBeGreaterThanOrEqual(-1e-6);
-      expect(m.housingFundWithdrawal).toBeLessThanOrEqual(999_999);
+      expect(m.planBalance).toBeGreaterThanOrEqual(-1e-6);
+      expect(m.planWithdrawal).toBeLessThanOrEqual(999_999);
     }
-    expect(r.warnings.some((w) => w.includes('余额不足'))).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'plan-balance-insufficient')).toBe(true);
   });
 
   it('原型页面允许公积金净额为负；这里余额永远守恒', () => {
     // 原页面：pfNet = pfSelf*2 - withdraw，提取超额时直接给出负数并按负数外推 20 年
-    const legacyNet = 14_600 * 0.12 * 2 - 5_000;
+    const legacyNet = 14_600 * 0.12 * 2 - 5_000; // 原页面写死 12%
     expect(legacyNet).toBeLessThan(0);
-    const r = projectTimeline(withInput((i) => { i.housingFund.monthlyWithdrawal = 5_000; }));
-    expect(r.summary.finalHousingFundBalance).toBeGreaterThanOrEqual(0);
+    const r = projectTimeline(withInput((i) => { i.employerPlan.monthlyWithdrawal = 5_000; }));
+    expect(r.summary.finalPlanBalance).toBeGreaterThanOrEqual(0);
   });
 
   it('公积金按 1.5% 结息，余额高于纯缴存累计', () => {
-    const withInterest = projectTimeline(withInput((i) => { i.housingFund.monthlyWithdrawal = 0; i.housingFund.annualInterestRate = 0.015; }));
-    const noInterest = projectTimeline(withInput((i) => { i.housingFund.monthlyWithdrawal = 0; i.housingFund.annualInterestRate = 0; }));
-    expect(withInterest.summary.finalHousingFundBalance).toBeGreaterThan(noInterest.summary.finalHousingFundBalance);
+    const withInterest = projectTimeline(withInput((i) => { i.employerPlan.monthlyWithdrawal = 0; i.employerPlan.annualInterestRate = 0.015; }));
+    const noInterest = projectTimeline(withInput((i) => { i.employerPlan.monthlyWithdrawal = 0; i.employerPlan.annualInterestRate = 0; }));
+    expect(withInterest.summary.finalPlanBalance).toBeGreaterThan(noInterest.summary.finalPlanBalance);
   });
 
   it('开销超过收入时定投归零并给出警告，不模拟借贷', () => {
     const r = projectTimeline(withInput((i) => { i.expense.monthlySpend = 100_000; }));
     expect(r.months.every((m) => m.invested === 0)).toBe(true);
     expect(r.summary.finalValue).toBeCloseTo(0, 6);
-    expect(r.warnings.some((w) => w.includes('没有可投资金'))).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'cash-flow-deficit')).toBe(true);
   });
 
   it('缴费基数封顶时给出提示', () => {
     const r = projectTimeline(withInput((i) => { i.income.monthlySalary = 80_000; }));
-    expect(r.warnings.some((w) => w.includes('缴费基数上限'))).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'contribution-base-capped')).toBe(true);
   });
 
   it('年度投入超过 5 万美元购汇额度时给出提示', () => {
@@ -120,15 +120,15 @@ describe('端到端投影', () => {
       i.income.monthlySalary = 200_000;
       i.expense.monthlySpend = 10_000;
     }));
-    expect(r.warnings.some((w) => w.includes('购汇便利化额度'))).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'fx-quota-exceeded')).toBe(true);
   });
 
   it('专项附加扣除实实在在降低税负、抬高终值', () => {
     const without = projectTimeline(withInput((i) => {
-      i.income.deductions = { childrenCount: 0, infantCount: 0, continuingEducation: 'none', housingType: 'none', elderlyCare: 'none' };
+      i.cn.deductions = { childrenCount: 0, infantCount: 0, continuingEducation: 'none', housingType: 'none', elderlyCare: 'none' };
     }));
     const with_ = projectTimeline(withInput((i) => {
-      i.income.deductions = { childrenCount: 2, infantCount: 0, continuingEducation: 'none', housingType: 'rent', elderlyCare: 'only-child' };
+      i.cn.deductions = { childrenCount: 2, infantCount: 0, continuingEducation: 'none', housingType: 'rent', elderlyCare: 'only-child' };
     }));
     expect(with_.summary.totalTaxPaid).toBeLessThan(without.summary.totalTaxPaid);
     expect(with_.summary.finalValue).toBeGreaterThan(without.summary.finalValue);
@@ -145,8 +145,8 @@ describe('端到端投影', () => {
   });
 
   it('政策到期开关会改变税负', () => {
-    const allowed = projectTimeline(withInput((i) => { i.allowSeparateBonusTax = true; i.income.monthlySalary = 40_000; }));
-    const expired = projectTimeline(withInput((i) => { i.allowSeparateBonusTax = false; i.income.monthlySalary = 40_000; }));
+    const allowed = projectTimeline(withInput((i) => { i.cn.allowSeparateBonusTax = true; i.income.monthlySalary = 40_000; }));
+    const expired = projectTimeline(withInput((i) => { i.cn.allowSeparateBonusTax = false; i.income.monthlySalary = 40_000; }));
     expect(expired.summary.totalTaxPaid).toBeGreaterThanOrEqual(allowed.summary.totalTaxPaid);
   });
 
@@ -154,10 +154,10 @@ describe('端到端投影', () => {
     const r = projectTimeline(staticInput);
     const y = r.years[0]!;
     expect(y.netAnnual).toBeCloseTo(
-      y.grossAnnual - y.socialInsuranceAnnual - y.housingFundSelfAnnual - y.taxAnnual,
+      y.grossAnnual - y.socialInsuranceAnnual - y.planSelfAnnual - y.taxAnnual,
       6,
     );
-    expect(r.months[0]!.housingFundBalance).toBeGreaterThan(0);
+    expect(r.months[0]!.planBalance).toBeGreaterThan(0);
   });
 
   it('时间轴的累计投入单调不减，账户价值在正收益下同样单调', () => {

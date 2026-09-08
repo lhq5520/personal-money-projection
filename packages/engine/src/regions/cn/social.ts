@@ -1,32 +1,30 @@
 /**
- * 五险一金个人缴纳额，以及专项附加扣除的月度合计。
+ * 中国五险一金个人缴纳额，以及专项附加扣除的月度合计。
  *
- * 相比原型页面的改进：原页面把社保写死为月薪的 10.5%、公积金写死为 12%，
- * 且完全不考虑缴费基数上下限。基数封顶对高薪影响很大——
- * 上海月薪 6 万的人，社保只按 36921 缴，而不是按 60000 缴。
+ * 缴费基数上下限对高薪影响很大：上海月薪 6 万的人，社保只按 36,921 缴，
+ * 而不是按 60,000 缴——原型页面缺这一步，会显著高估高薪者的社保支出。
  */
 
-import type { ContributionOverrides, SpecialDeductions } from '../../types.js';
-import type { CityProfile } from './cities.js';
+import type { ContributionComponent, ContributionOverrides, CnSpecialDeductions } from '../../types.js';
+import { clamp } from '../../tax/brackets.js';
+import {
+  CN_MEDICAL_RATE,
+  CN_PENSION_RATE,
+  housingFundBaseRange,
+  socialBaseRange,
+  type CityProfile,
+} from './cities.js';
 import { DEDUCTION_STANDARDS } from './tax.js';
 
-const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
-
-export interface Contributions {
-  /** 实际适用的社保缴费基数（已封顶/保底） */
+export interface CnContributions {
   socialBase: number;
-  /** 实际适用的公积金缴存基数 */
   housingFundBase: number;
-  pension: number;
-  medical: number;
-  unemployment: number;
-  /** 社保个人合计（养老+医疗+失业） */
+  breakdown: ContributionComponent[];
   socialTotal: number;
   housingFundSelf: number;
   housingFundEmployer: number;
   /** 个税「专项扣除」= 社保个人部分 + 公积金个人部分 */
   taxDeductible: number;
-  /** 月薪是否触及基数上限，用于给用户提示 */
   socialBaseCapped: boolean;
   housingFundBaseCapped: boolean;
 }
@@ -35,50 +33,47 @@ export function computeContributions(
   monthlySalary: number,
   city: CityProfile,
   overrides?: ContributionOverrides,
-): Contributions {
-  const socialMin = overrides?.socialBaseMin ?? city.social.baseMin;
-  const socialMax = overrides?.socialBaseMax ?? city.social.baseMax;
-  const hfMin = overrides?.housingFundBaseMin ?? city.housingFund.baseMin;
-  const hfMax = overrides?.housingFundBaseMax ?? city.housingFund.baseMax;
+): CnContributions {
+  const s = socialBaseRange(city);
+  const h = housingFundBaseRange(city);
+
+  const socialMin = overrides?.socialBaseMin ?? s.min;
+  const socialMax = overrides?.socialBaseMax ?? s.max;
+  const hfMin = overrides?.planBaseMin ?? h.min;
+  const hfMax = overrides?.planBaseMax ?? h.max;
 
   const socialBase = clamp(monthlySalary, socialMin, socialMax);
   const housingFundBase = clamp(monthlySalary, hfMin, hfMax);
 
-  const hfRateSelf = overrides?.housingFundRateSelf ?? city.housingFund.rateDefault;
-  const hfRateEmployer = overrides?.housingFundRateEmployer ?? hfRateSelf;
+  const hfRateSelf = overrides?.planRateSelf ?? city.hfRateDefault;
+  const hfRateEmployer = overrides?.planRateEmployer ?? hfRateSelf;
 
-  let pension: number;
-  let medical: number;
-  let unemployment: number;
+  const nominalRate = CN_PENSION_RATE + CN_MEDICAL_RATE + city.unemployment;
+  // 用户直接给了社保合计费率时，按各险种原有占比拆分，仅用于明细展示
+  const scale = overrides?.socialRateSelf !== undefined && nominalRate > 0
+    ? overrides.socialRateSelf / nominalRate
+    : 1;
 
-  if (overrides?.socialRateSelf !== undefined) {
-    // 用户直接给了社保合计费率时，按各险种原有占比拆分，仅用于明细展示
-    const nominal = city.social.pension + city.social.medical + city.social.unemployment;
-    const scale = nominal > 0 ? overrides.socialRateSelf / nominal : 0;
-    pension = socialBase * city.social.pension * scale;
-    medical = socialBase * city.social.medical * scale;
-    unemployment = socialBase * city.social.unemployment * scale;
-  } else {
-    pension = socialBase * city.social.pension;
-    medical = socialBase * city.social.medical;
-    unemployment = socialBase * city.social.unemployment;
-  }
+  const socialBaseCapped = monthlySalary > socialMax;
+  const breakdown: ContributionComponent[] = [
+    { code: 'cn-pension', amount: socialBase * CN_PENSION_RATE * scale, capped: socialBaseCapped },
+    { code: 'cn-medical', amount: socialBase * CN_MEDICAL_RATE * scale, capped: socialBaseCapped },
+    { code: 'cn-unemployment', amount: socialBase * city.unemployment * scale, capped: socialBaseCapped },
+  ];
 
-  const socialTotal = pension + medical + unemployment;
+  const socialTotal = breakdown.reduce((sum, b) => sum + b.amount, 0);
   const housingFundSelf = housingFundBase * hfRateSelf;
   const housingFundEmployer = housingFundBase * hfRateEmployer;
 
   return {
     socialBase,
     housingFundBase,
-    pension,
-    medical,
-    unemployment,
+    breakdown,
     socialTotal,
     housingFundSelf,
     housingFundEmployer,
     taxDeductible: socialTotal + housingFundSelf,
-    socialBaseCapped: monthlySalary > socialMax,
+    socialBaseCapped,
     housingFundBaseCapped: monthlySalary > hfMax,
   };
 }
@@ -86,10 +81,10 @@ export function computeContributions(
 /**
  * 专项附加扣除的月度合计。
  *
- * 注意：住房贷款利息与住房租金两项**不能同时享受**，类型上用互斥的 housingType 保证。
- * 大病医疗需在年度汇算时据实申报，金额不可预知，长期预测中不建模。
+ * 住房贷款利息与住房租金**不能同时享受**，由互斥的 housingType 在类型层面保证。
+ * 大病医疗须在年度汇算时据实申报，金额不可预知，长期预测中不建模。
  */
-export function monthlySpecialDeduction(d: SpecialDeductions, city: CityProfile): number {
+export function monthlySpecialDeduction(d: CnSpecialDeductions, city: CityProfile): number {
   let total = 0;
 
   total += d.childrenCount * DEDUCTION_STANDARDS.childEducationPerChild;

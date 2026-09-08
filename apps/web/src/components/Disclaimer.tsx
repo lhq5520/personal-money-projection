@@ -1,26 +1,23 @@
-import { getCity } from '@pmp/engine';
+import { getJurisdiction, getRegion, type RegionCode } from '@pmp/engine';
+import { useI18n, type TranslationKey } from '../i18n/index.js';
 
-export function Disclaimer({ city }: { city: string }) {
-  const profile = getCity(city);
+export function Disclaimer({ region, jurisdiction }: { region: RegionCode; jurisdiction: string }) {
+  const { t, name } = useI18n();
+  const mod = getRegion(region);
+  const j = getJurisdiction(region, jurisdiction);
+
   return (
     <p className="note">
-      <strong>模型口径。</strong>
-      个税按居民个人综合所得年度计算，含基本减除费用 60000 元、五险一金专项扣除与专项附加扣除；
-      年终奖在「单独计税」与「并入综合所得」之间逐年自动择优。月度税额按年度税额均摊展示，
-      与实际的累计预扣法逐月不均有差异，但全年合计一致。大病医疗需汇算时据实申报，金额不可预知，未纳入模型。
+      <strong>{t('disclaimer.model')}</strong> {t(`disclaimer.model.${region}` as TranslationKey)}{' '}
+      {t('disclaimer.monthly')}
       {' '}
-      <strong>城市参数。</strong>
-      {profile.name}：{profile.effectiveNote}。社保缴费基数上下限每年随社平工资调整，
-      公积金比例各单位也不同，请对照你的工资条核对，所有参数都可以在界面上直接改。
+      {/* 用 · 分隔而不是括号冒号：中英文的括号与冒号是不同字符，硬编码任何一种都会在另一种语言下出戏 */}
+      <strong>{t('disclaimer.jurisdiction')}</strong> {name(j.name)} ·{' '}
+      {t('region.taxYear', { year: mod.taxYear })} · {name(j.note)}
       {' '}
-      <strong>投资假设。</strong>
-      蒙特卡洛采用几何布朗运动，对数漂移取 ln(1+μ)−σ²/2，并扣除基金费率与股息预扣税。
-      分位数是同一组假设下的模拟分布，不是预测，更不是收益承诺；真实市场会出现模型未覆盖的尾部情形。
-      标普 500 的历史表现不代表未来收益。
+      <strong>{t('disclaimer.investment')}</strong> {t('disclaimer.investment.body')}
       {' '}
-      <strong>未建模的部分。</strong>
-      汇率波动、购汇额度以外的合规路径、投资端资本利得税、债务与房贷、失业与重大疾病等中断，均未纳入。
-      本工具仅供个人规划参考，不构成投资建议。
+      <strong>{t('disclaimer.missing')}</strong> {t('disclaimer.missing.body')}
     </p>
   );
 }

@@ -7,7 +7,8 @@
 
 import { projectionInputSchema, type ProjectionInputDTO } from '@pmp/shared';
 
-const KEY = 'pmp.input.v1';
+// v2：多地区改造后输入结构变了，旧存档无法通过 schema 校验，换 key 避免每次启动都白解析一遍
+const KEY = 'pmp.input.v2';
 const THEME_KEY = 'pmp.theme.v1';
 
 export function loadLocalInput(): ProjectionInputDTO | null {

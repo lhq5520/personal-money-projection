@@ -3,6 +3,8 @@
  *
  * 数据库里金额存 Decimal（避免浮点误差），引擎侧算的是 number，
  * 边界转换集中在这一个文件里，业务代码两边都不用关心 Decimal。
+ *
+ * 三个地区的参数同时读写：切换国家时不丢设置，与前端行为一致。
  */
 
 import type { Prisma, SalaryStep, Scenario } from '@prisma/client';
@@ -22,46 +24,36 @@ function readOverrides(row: ScenarioRow): ProjectionInputDTO['overrides'] {
     socialBaseMin: numOrUndef(row.ovSocialBaseMin),
     socialBaseMax: numOrUndef(row.ovSocialBaseMax),
     socialRateSelf: numOrUndef(row.ovSocialRateSelf),
-    housingFundBaseMin: numOrUndef(row.ovHfBaseMin),
-    housingFundBaseMax: numOrUndef(row.ovHfBaseMax),
-    housingFundRateSelf: numOrUndef(row.ovHfRateSelf),
-    housingFundRateEmployer: numOrUndef(row.ovHfRateEmployer),
+    planBaseMin: numOrUndef(row.ovPlanBaseMin),
+    planBaseMax: numOrUndef(row.ovPlanBaseMax),
+    planRateSelf: numOrUndef(row.ovPlanRateSelf),
+    planRateEmployer: numOrUndef(row.ovPlanRateEmployer),
   };
   return Object.values(o).some((v) => v !== undefined) ? o : undefined;
 }
 
 export function rowToInput(row: ScenarioRow): ProjectionInputDTO {
   return {
-    region: 'CN',
-    city: row.city,
-    allowSeparateBonusTax: row.allowSeparateBonusTax,
+    region: row.region as ProjectionInputDTO['region'],
+    jurisdiction: row.jurisdiction,
     income: {
       monthlySalary: num(row.monthlySalary),
       salaryMonths: num(row.salaryMonths),
-      mealAllowance: num(row.mealAllowance),
+      taxFreeAllowance: num(row.taxFreeAllowance),
       annualGrowthRate: num(row.salaryGrowthRate),
       salarySteps: row.salarySteps
         .slice()
         .sort((a, b) => a.atYear - b.atYear)
         .map((s) => ({ atYear: s.atYear, newMonthlySalary: num(s.newMonthlySalary) })),
-      deductions: {
-        childrenCount: row.childrenCount,
-        infantCount: row.infantCount,
-        continuingEducation: row.continuingEducation as 'none' | 'degree' | 'vocational',
-        housingType: row.housingType as 'none' | 'loan' | 'rent',
-        rentTier: (row.rentTier ?? undefined) as 'tier1' | 'tier2' | 'tier3' | undefined,
-        elderlyCare: row.elderlyCare as 'none' | 'only-child' | 'shared',
-        elderlyShareAmount: numOrUndef(row.elderlyShareAmount),
-      },
     },
     expense: {
       monthlySpend: num(row.monthlySpend),
       annualGrowthRate: num(row.spendGrowthRate),
     },
-    housingFund: {
-      monthlyWithdrawal: num(row.hfMonthlyWithdrawal),
-      annualInterestRate: num(row.hfAnnualInterestRate),
-      investWithdrawal: row.hfInvestWithdrawal,
+    employerPlan: {
+      monthlyWithdrawal: num(row.planMonthlyWithdrawal),
+      annualInterestRate: num(row.planAnnualInterestRate),
+      investWithdrawal: row.planInvestWithdrawal,
     },
     investment: {
       initialCapital: num(row.initialCapital),
@@ -75,6 +67,31 @@ export function rowToInput(row: ScenarioRow): ProjectionInputDTO {
     },
     inflation: { annualRate: num(row.inflationRate) },
     overrides: readOverrides(row),
+    cn: {
+      allowSeparateBonusTax: row.cnAllowSeparateBonusTax,
+      deductions: {
+        childrenCount: row.cnChildrenCount,
+        infantCount: row.cnInfantCount,
+        continuingEducation: row.cnContinuingEducation as 'none' | 'degree' | 'vocational',
+        housingType: row.cnHousingType as 'none' | 'loan' | 'rent',
+        rentTier: (row.cnRentTier ?? undefined) as 'tier1' | 'tier2' | 'tier3' | undefined,
+        elderlyCare: row.cnElderlyCare as 'none' | 'only-child' | 'shared',
+        elderlyShareAmount: numOrUndef(row.cnElderlyShareAmount),
+      },
+    },
+    us: {
+      filingStatus: row.usFilingStatus as ProjectionInputDTO['us']['filingStatus'],
+      qualifyingChildren: row.usQualifyingChildren,
+      itemizedDeduction: num(row.usItemizedDeduction),
+      pretaxRetirementRate: num(row.usPretaxRetirementRate),
+      employerMatchRate: num(row.usEmployerMatchRate),
+    },
+    ca: {
+      filingStatus: row.caFilingStatus as ProjectionInputDTO['ca']['filingStatus'],
+      rrspRate: num(row.caRrspRate),
+      employerMatchRate: num(row.caEmployerMatchRate),
+      otherCreditBase: num(row.caOtherCreditBase),
+    },
   };
 }
 
@@ -93,33 +110,23 @@ export function rowToDTO(row: ScenarioRow): ScenarioDTO {
 export function inputToScalars(
   input: ProjectionInputDTO,
 ): Omit<Prisma.ScenarioCreateInput, 'name' | 'user' | 'salarySteps'> {
-  const d = input.income.deductions;
+  const d = input.cn.deductions;
   const o = input.overrides;
   return {
     region: input.region,
-    city: input.city,
-    allowSeparateBonusTax: input.allowSeparateBonusTax,
+    jurisdiction: input.jurisdiction,
 
     monthlySalary: input.income.monthlySalary,
     salaryMonths: input.income.salaryMonths,
-    mealAllowance: input.income.mealAllowance,
+    taxFreeAllowance: input.income.taxFreeAllowance,
     salaryGrowthRate: input.income.annualGrowthRate,
-
-    childrenCount: d.childrenCount,
-    infantCount: d.infantCount,
-    continuingEducation: d.continuingEducation,
-    housingType: d.housingType,
-    // 只有选了租房才存档位，避免留下与 housingType 矛盾的脏数据
-    rentTier: d.housingType === 'rent' ? (d.rentTier ?? null) : null,
-    elderlyCare: d.elderlyCare,
-    elderlyShareAmount: d.elderlyCare === 'shared' ? (d.elderlyShareAmount ?? null) : null,
 
     monthlySpend: input.expense.monthlySpend,
     spendGrowthRate: input.expense.annualGrowthRate,
 
-    hfMonthlyWithdrawal: input.housingFund.monthlyWithdrawal,
-    hfAnnualInterestRate: input.housingFund.annualInterestRate,
-    hfInvestWithdrawal: input.housingFund.investWithdrawal,
+    planMonthlyWithdrawal: input.employerPlan.monthlyWithdrawal,
+    planAnnualInterestRate: input.employerPlan.annualInterestRate,
+    planInvestWithdrawal: input.employerPlan.investWithdrawal,
 
     initialCapital: input.investment.initialCapital,
     years: input.investment.years,
@@ -132,12 +139,33 @@ export function inputToScalars(
 
     inflationRate: input.inflation.annualRate,
 
+    cnAllowSeparateBonusTax: input.cn.allowSeparateBonusTax,
+    cnChildrenCount: d.childrenCount,
+    cnInfantCount: d.infantCount,
+    cnContinuingEducation: d.continuingEducation,
+    cnHousingType: d.housingType,
+    // 只有选了租房才存档位，避免留下与 housingType 矛盾的脏数据
+    cnRentTier: d.housingType === 'rent' ? (d.rentTier ?? null) : null,
+    cnElderlyCare: d.elderlyCare,
+    cnElderlyShareAmount: d.elderlyCare === 'shared' ? (d.elderlyShareAmount ?? null) : null,
+
+    usFilingStatus: input.us.filingStatus,
+    usQualifyingChildren: input.us.qualifyingChildren,
+    usItemizedDeduction: input.us.itemizedDeduction,
+    usPretaxRetirementRate: input.us.pretaxRetirementRate,
+    usEmployerMatchRate: input.us.employerMatchRate,
+
+    caFilingStatus: input.ca.filingStatus,
+    caRrspRate: input.ca.rrspRate,
+    caEmployerMatchRate: input.ca.employerMatchRate,
+    caOtherCreditBase: input.ca.otherCreditBase,
+
     ovSocialBaseMin: o?.socialBaseMin ?? null,
     ovSocialBaseMax: o?.socialBaseMax ?? null,
     ovSocialRateSelf: o?.socialRateSelf ?? null,
-    ovHfBaseMin: o?.housingFundBaseMin ?? null,
-    ovHfBaseMax: o?.housingFundBaseMax ?? null,
-    ovHfRateSelf: o?.housingFundRateSelf ?? null,
-    ovHfRateEmployer: o?.housingFundRateEmployer ?? null,
+    ovPlanBaseMin: o?.planBaseMin ?? null,
+    ovPlanBaseMax: o?.planBaseMax ?? null,
+    ovPlanRateSelf: o?.planRateSelf ?? null,
+    ovPlanRateEmployer: o?.planRateEmployer ?? null,
   };
 }

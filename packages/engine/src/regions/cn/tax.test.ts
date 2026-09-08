@@ -4,9 +4,9 @@ import {
   MONTHLY_BRACKETS,
   chooseBonusTaxStrategy,
   comprehensiveTax,
-  findBracket,
   separateBonusTax,
 } from './tax.js';
+import { findBracket } from '../../tax/brackets.js';
 
 describe('综合所得税率表', () => {
   it('七档齐全，包含原型页面漏掉的 35% 与 45%', () => {

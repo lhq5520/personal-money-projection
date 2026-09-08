@@ -9,13 +9,8 @@
  * 并补上原页面完全没有的两块：专项附加扣除、年终奖单独计税 vs 并入综合所得的择优。
  */
 
-export interface TaxBracket {
-  /** 该档的上界（含） */
-  upTo: number;
-  rate: number;
-  /** 速算扣除数 */
-  quickDeduction: number;
-}
+import type { TaxBracket } from '../../types.js';
+import { bracketTax, findBracket } from '../../tax/brackets.js';
 
 /** 年度综合所得税率表（个人所得税法 税率表一） */
 export const COMPREHENSIVE_BRACKETS: readonly TaxBracket[] = [
@@ -55,23 +50,12 @@ export const DEDUCTION_STANDARDS = {
   elderlySharedMax: 1_500,
 } as const;
 
-export function findBracket(brackets: readonly TaxBracket[], amount: number): TaxBracket {
-  for (const b of brackets) {
-    if (amount <= b.upTo) return b;
-  }
-  // 最后一档的 upTo 是 Infinity，这里不可达；兜底避免 noUncheckedIndexedAccess 报错
-  return brackets[brackets.length - 1]!;
-}
-
 /**
  * 综合所得年度应纳税额。
  * @param taxableIncome 应纳税所得额（已扣除基本减除、专项扣除、专项附加扣除），允许为负
  */
 export function comprehensiveTax(taxableIncome: number): number {
-  const taxable = Math.max(0, taxableIncome);
-  if (taxable === 0) return 0;
-  const b = findBracket(COMPREHENSIVE_BRACKETS, taxable);
-  return Math.max(0, taxable * b.rate - b.quickDeduction);
+  return bracketTax(COMPREHENSIVE_BRACKETS, taxableIncome);
 }
 
 /**
@@ -84,12 +68,14 @@ export function comprehensiveTax(taxableIncome: number): number {
 export function separateBonusTax(bonus: number): number {
   if (bonus <= 0) return 0;
   const b = findBracket(MONTHLY_BRACKETS, bonus / 12);
-  return Math.max(0, bonus * b.rate - b.quickDeduction);
+  return Math.max(0, bonus * b.rate - (b.quickDeduction ?? 0));
 }
 
 export interface BonusTaxChoice {
   strategy: 'separate' | 'merged';
   totalTax: number;
+  /** 单独计税时年终奖自身承担的税额；并入综合所得时为 0 */
+  bonusTax: number;
   separateTotal: number;
   mergedTotal: number;
   /** 择优相比另一种方式省下的税额 */
@@ -115,18 +101,21 @@ export function chooseBonusTaxStrategy(
     return {
       strategy: 'merged',
       totalTax: mergedTotal,
+      bonusTax: 0,
       separateTotal: mergedTotal,
       mergedTotal,
       saving: 0,
     };
   }
 
-  const separateTotal = comprehensiveTax(taxableBeforeBonus) + separateBonusTax(bonus);
+  const bonusTax = separateBonusTax(bonus);
+  const separateTotal = comprehensiveTax(taxableBeforeBonus) + bonusTax;
   const useSeparate = separateTotal < mergedTotal;
 
   return {
     strategy: useSeparate ? 'separate' : 'merged',
     totalTax: useSeparate ? separateTotal : mergedTotal,
+    bonusTax: useSeparate ? bonusTax : 0,
     separateTotal,
     mergedTotal,
     saving: Math.abs(separateTotal - mergedTotal),
