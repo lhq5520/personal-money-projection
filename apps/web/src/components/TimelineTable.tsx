@@ -1,0 +1,50 @@
+import type { MonteCarloResult, ProjectionResult } from '@pmp/engine';
+import { money } from '../lib/format.js';
+import type { ValueMode } from './FanChart.js';
+
+/**
+ * 图表的表格替代读法。
+ *
+ * 既是无障碍要求，也是浅色模式下 aqua 系列未达 3:1 对比度所需的补偿手段之一：
+ * 任何看不清颜色的读者都能从这里拿到完全相同的数据。
+ */
+export function TimelineTable({
+  result, mc, mode,
+}: { result: ProjectionResult; mc: MonteCarloResult | null; mode: ValueMode }) {
+  const rate = result.input.inflation.annualRate;
+  const adjust = (v: number, y: number) => (mode === 'real' ? v / Math.pow(1 + rate, y) : v);
+
+  return (
+    <div className="table-wrap">
+      <table>
+        <caption className="sr-only">
+          逐年的累计投入本金与账户价值分位数{mode === 'real' ? '（按今日购买力折算）' : '（名义金额）'}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">年</th>
+            <th scope="col">累计投入</th>
+            <th scope="col">P10</th>
+            <th scope="col">P50</th>
+            <th scope="col">P90</th>
+          </tr>
+        </thead>
+        <tbody>
+          {result.timeline.map((t) => {
+            const pt = t.year === 0 ? null : mc?.byYear[t.year - 1];
+            const p = pt ? (mode === 'real' ? pt.real : pt) : null;
+            return (
+              <tr key={t.year}>
+                <th scope="row">{t.year}</th>
+                <td>{money(adjust(t.contribution, t.year))}</td>
+                <td>{p ? money(p.p10) : '—'}</td>
+                <td>{p ? money(p.p50) : money(adjust(t.value, t.year))}</td>
+                <td>{p ? money(p.p90) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}

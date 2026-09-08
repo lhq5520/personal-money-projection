@@ -1,0 +1,27 @@
+{
+  "name": "personal-money-projection",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" dev",
+    "dev:web": "pnpm --filter @pmp/web dev",
+    "dev:api": "pnpm --filter @pmp/api dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:watch": "pnpm --filter @pmp/engine test:watch",
+    "typecheck": "pnpm -r typecheck",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down",
+    "db:migrate": "pnpm --filter @pmp/api db:migrate",
+    "db:studio": "pnpm --filter @pmp/api db:studio",
+    "db:generate": "pnpm --filter @pmp/api db:generate"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

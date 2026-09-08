@@ -1,0 +1,33 @@
+{
+  "name": "@pmp/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "echo no tests",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset --force"
+  },
+  "dependencies": {
+    "@better-auth/prisma-adapter": "^1.7.3",
+    "@hono/node-server": "^1.13.7",
+    "@pmp/shared": "workspace:*",
+    "@prisma/client": "^6.3.1",
+    "better-auth": "^1.1.15",
+    "hono": "^4.6.20",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "prisma": "^6.3.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

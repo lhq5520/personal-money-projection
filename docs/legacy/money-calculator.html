@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Money-related · 收入与 S&P 500 投资规划器</title>
+  <style>
+    :root { --bg:#0c1222; --panel:#141d32; --panel2:#1a2740; --text:#eef4ff; --muted:#a9b8d2; --line:#2b3a59; --blue:#70a7ff; --green:#59d69b; --orange:#ffbd70; --red:#ff7f8e; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 15% 0%,#1a2a4a 0,#0c1222 42%); color:var(--text); font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+    .wrap { max-width:1180px; margin:0 auto; padding:28px 18px 50px; }
+    h1 { margin:0 0 6px; font-size:clamp(25px,4vw,40px); letter-spacing:-.04em; }
+    h2 { margin:0 0 16px; font-size:18px; }
+    .sub { color:var(--muted); margin:0 0 24px; }
+    .grid { display:grid; grid-template-columns:360px 1fr; gap:18px; align-items:start; }
+    .panel { background:rgba(20,29,50,.9); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 14px 40px #0002; }
+    .controls { position:sticky; top:16px; }
+    .control { margin:0 0 18px; }
+    .row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+    label { color:var(--muted); }
+    output { color:var(--text); font-weight:700; white-space:nowrap; }
+    input[type=range] { width:100%; accent-color:var(--blue); margin:10px 0 0; }
+    .hint { color:#8395b4; font-size:12px; margin-top:3px; }
+    .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+    .metric { background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:14px; min-height:104px; }
+    .metric .k { color:var(--muted); font-size:12px; }
+    .metric .v { font-size:24px; font-weight:800; margin-top:7px; letter-spacing:-.03em; }
+    .metric.blue .v { color:var(--blue); } .metric.green .v { color:var(--green); } .metric.orange .v { color:var(--orange); }
+    .chartbox { height:300px; position:relative; }
+    canvas { width:100%; height:100%; display:block; }
+    .legend { display:flex; gap:18px; color:var(--muted); font-size:12px; margin-top:8px; }
+    .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; } .d1{background:var(--blue)} .d2{background:var(--green)}
+    .compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:18px; }
+    .compare > div { background:#10192c; border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .compare h3 { font-size:14px; margin:0 0 10px; }
+    .line { display:flex; justify-content:space-between; margin:6px 0; gap:10px; color:var(--muted); }
+    .line strong { color:var(--text); text-align:right; }
+    .note { margin-top:18px; color:#8fa2c3; font-size:12px; }
+    .pill { display:inline-block; background:#243554; color:#cfe0ff; padding:3px 8px; border-radius:999px; font-size:12px; }
+    @media(max-width:850px){ .grid{grid-template-columns:1fr}.controls{position:static}.cards{grid-template-columns:repeat(2,1fr)} }
+    @media(max-width:480px){ .wrap{padding:20px 12px}.panel{padding:15px}.cards{gap:8px}.metric{padding:11px}.metric .v{font-size:19px}.compare{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>收入 → 投资 → 未来</h1>
+    <p class="sub">调节参数，看看不同收入和消费情况下，每月还能投入多少，以及长期 S&amp;P 500 投资的复利结果。</p>
+    <div class="grid">
+      <section class="panel controls">
+        <h2>你的参数</h2>
+        <div class="control"><div class="row"><label>税前月薪</label><output id="salaryOut"></output></div><input id="salary" type="range" min="8000" max="40000" step="100" value="14600"><div class="hint">人民币；用于估算工资和全年收入</div></div>
+        <div class="control"><div class="row"><label>全年薪数</label><output id="monthsOut"></output></div><input id="months" type="range" min="12" max="15" step="1" value="15"><div class="hint">额外薪资按一次性奖金粗略估算</div></div>
+        <div class="control"><div class="row"><label>每月餐补</label><output id="mealOut"></output></div><input id="meal" type="range" min="0" max="2000" step="50" value="600"><div class="hint">按可用于消费/投资的金额计算</div></div>
+        <div class="control"><div class="row"><label>每月生活费</label><output id="spendOut"></output></div><input id="spend" type="range" min="3000" max="20000" step="100" value="6000"></div>
+        <div class="control"><div class="row"><label>每月公积金提取</label><output id="withdrawOut"></output></div><input id="withdraw" type="range" min="0" max="5000" step="100" value="1500"><div class="hint">必须符合当地提取政策；不是自动可取现金</div></div>
+        <div class="control"><div class="row"><label>投资年限</label><output id="yearsOut"></output></div><input id="years" type="range" min="1" max="40" step="1" value="20"></div>
+        <div class="control"><div class="row"><label>预期年化收益率</label><output id="returnOut"></output></div><input id="returnRate" type="range" min="0" max="12" step="0.5" value="7"><div class="hint">只是情景假设，不是收益承诺</div></div>
+        <div class="control"><div class="row"><label>初始投资本金</label><output id="initialOut"></output></div><input id="initial" type="range" min="0" max="300000" step="5000" value="0"></div>
+      </section>
+
+      <section>
+        <div class="cards">
+          <div class="metric blue"><div class="k">平均月到手（估算）</div><div class="v" id="netOut">—</div></div>
+          <div class="metric green"><div class="k">每月可投入 S&amp;P 500</div><div class="v" id="investOut">—</div></div>
+          <div class="metric orange"><div class="k">累计投入本金</div><div class="v" id="principalOut">—</div></div>
+          <div class="metric green"><div class="k">预计期末金额</div><div class="v" id="futureOut">—</div></div>
+        </div>
+        <div class="panel">
+          <div class="row"><h2>复利 projection</h2><span class="pill" id="summaryOut">—</span></div>
+          <div class="chartbox"><canvas id="chart"></canvas></div>
+          <div class="legend"><span><i class="dot d1"></i>累计投入</span><span><i class="dot d2"></i>预计账户价值</span></div>
+        </div>
+        <div class="compare">
+          <div><h3>现金流拆解</h3><div class="line"><span>全年税前总收入</span><strong id="grossOut">—</strong></div><div class="line"><span>估算全年个税</span><strong id="taxOut">—</strong></div><div class="line"><span>五险一金个人部分</span><strong id="deductOut">—</strong></div><div class="line"><span>每月可投入</span><strong id="monthlyOut">—</strong></div></div>
+          <div><h3>公积金长期积累</h3><div class="line"><span>个人每月缴存</span><strong id="pfSelfOut">—</strong></div><div class="line"><span>公司每月缴存</span><strong id="pfCompanyOut">—</strong></div><div class="line"><span>扣除提取后月净增加</span><strong id="pfNetOut">—</strong></div><div class="line"><span>20 年账户缴存（未计利息）</span><strong id="pf20Out">—</strong></div></div>
+        </div>
+        <p class="note">模型说明：五险一金按公积金基数等于月薪、个人社保约 10.5%、公积金 12% 粗估；个税按居民综合所得及额外薪资简化估算。实际工资条、年终奖计税方式、社保基数、投资税费和汇率可能不同。标普 500 历史表现不代表未来收益。</p>
+      </section>
+    </div>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    const fmt = n => new Intl.NumberFormat('zh-CN',{maximumFractionDigits:0}).format(Math.max(0,n));
+    const money = n => '¥' + fmt(n);
+    const inputs = ['salary','months','meal','spend','withdraw','years','returnRate','initial'];
+    function annualTax(taxable){ if(taxable<=36000)return taxable*.03; if(taxable<=144000)return taxable*.10-2520; if(taxable<=300000)return taxable*.20-16920; if(taxable<=420000)return taxable*.25-31920; return taxable*.30-52920; }
+    function calc(){
+      const salary=+$('salary').value, months=+$('months').value, meal=+$('meal').value, spend=+$('spend').value, withdraw=+$('withdraw').value, years=+$('years').value, rate=+$('returnRate').value/100, initial=+$('initial').value;
+      const pfSelf=salary*.12, social=salary*.105, fixedDeduct=(pfSelf+social)*12;
+      const regularTaxable=Math.max(0,salary*12-fixedDeduct-60000);
+      let tax=annualTax(regularTaxable);
+      const bonus=salary*(months-12); if(bonus>0) tax += Math.max(0,bonus*.10-210); // simplified separate-bonus treatment
+      const annualGross=salary*months, annualNet=annualGross-fixedDeduct-tax, avgNet=annualNet/12;
+      const monthlyInvest=Math.max(0,avgNet+meal+withdraw-spend);
+      const mrate=Math.pow(1+rate,1/12)-1, totalMonths=years*12;
+      let value=initial, principal=initial; const rows=[{year:0,value,principal}];
+      for(let m=1;m<=totalMonths;m++){ value=value*(1+mrate)+monthlyInvest; principal+=monthlyInvest; if(m%12===0) rows.push({year:m/12,value,principal}); }
+      $('salaryOut').textContent=money(salary); $('monthsOut').textContent=months+' 薪'; $('mealOut').textContent=money(meal); $('spendOut').textContent=money(spend); $('withdrawOut').textContent=money(withdraw); $('yearsOut').textContent=years+' 年'; $('returnOut').textContent=(rate*100).toFixed(1)+'%'; $('initialOut').textContent=money(initial);
+      $('netOut').textContent=money(avgNet); $('investOut').textContent=money(monthlyInvest); $('principalOut').textContent=money(principal); $('futureOut').textContent=money(value); $('summaryOut').textContent=years+' 年后约 '+money(value);
+      $('grossOut').textContent=money(annualGross); $('taxOut').textContent=money(tax); $('deductOut').textContent=money(fixedDeduct/12); $('monthlyOut').textContent=money(monthlyInvest); $('pfSelfOut').textContent=money(pfSelf); $('pfCompanyOut').textContent=money(pfSelf); $('pfNetOut').textContent=money(pfSelf*2-withdraw); $('pf20Out').textContent=money(Math.max(0,pfSelf*2-withdraw)*12*20);
+      draw(rows);
+    }
+    function draw(rows){
+      const c=$('chart'), rect=c.getBoundingClientRect(), d=devicePixelRatio||1; c.width=rect.width*d; c.height=rect.height*d; const x=c.getContext('2d'); x.scale(d,d); const W=rect.width,H=rect.height; x.clearRect(0,0,W,H);
+      const max=Math.max(1,...rows.map(r=>r.value)), pad={l:48,r:12,t:18,b:30}; const sx=(W-pad.l-pad.r)/Math.max(1,rows.length-1), sy=(H-pad.t-pad.b)/max;
+      x.strokeStyle='#2b3a59'; x.lineWidth=1; x.font='11px system-ui'; x.fillStyle='#8395b4';
+      for(let i=0;i<=4;i++){const y=pad.t+(H-pad.t-pad.b)*i/4; x.beginPath();x.moveTo(pad.l,y);x.lineTo(W-pad.r,y);x.stroke(); const val=max*(1-i/4); x.fillText(val>=1000000?(val/1000000).toFixed(1)+'m':val>=10000?Math.round(val/10000)+'万':Math.round(val),4,y+4);}
+      function line(key,color){x.beginPath(); rows.forEach((r,i)=>{const px=pad.l+i*sx,py=H-pad.b-r[key]*sy;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle=color;x.lineWidth=3;x.stroke();}
+      line('principal','#70a7ff'); line('value','#59d69b');
+      x.fillStyle='#8395b4'; x.textAlign='center'; rows.forEach((r,i)=>{if(i===0||i===rows.length-1||i%5===0)x.fillText(r.year+'年',pad.l+i*sx,H-8)}); x.textAlign='start';
+    }
+    inputs.forEach(id=>$(id).addEventListener('input',calc)); addEventListener('resize',calc); calc();
+  </script>
+</body>
+</html>

@@ -1,0 +1,174 @@
+// Personal Money Projection —— 数据模型
+//
+// 金额一律用 Decimal 而非 Float：40 年 480 次月度复利迭代下，
+// 二进制浮点的累积误差会大到肉眼可见。比率用 Decimal(8,6)，精确到百万分之一。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * ------------------------------------------------- Better Auth 所需的表
+ */
+
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions  Session[]
+  accounts  Account[]
+  scenarios Scenario[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  /// 邮箱密码登录时存放 Better Auth 生成的密码哈希，绝不存明文
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+/**
+ * ------------------------------------------------------------ 业务模型
+ */
+
+/// 一套完整的财务假设。选择关系化明文存储（而非加密 blob），
+/// 换来的是服务端可查询、可聚合、可跨方案对比的能力。
+model Scenario {
+  id     String  @id @default(cuid())
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  note   String?
+
+  region                String  @default("CN")
+  city                  String  @default("shanghai")
+  /// 年终奖单独计税政策是否仍然有效（现行政策延续至 2027-12-31）
+  allowSeparateBonusTax Boolean @default(true)
+
+  // ---- 收入 ----
+  monthlySalary    Decimal @db.Decimal(16, 2)
+  /// 全年薪数，允许 13.5 这类非整数，故用 Decimal
+  salaryMonths     Decimal @db.Decimal(5, 2)
+  mealAllowance    Decimal @db.Decimal(16, 2)
+  salaryGrowthRate Decimal @db.Decimal(8, 6)
+
+  // ---- 专项附加扣除 ----
+  childrenCount       Int      @default(0)
+  infantCount         Int      @default(0)
+  continuingEducation String   @default("none") // none | degree | vocational
+  housingType         String   @default("none") // none | loan | rent（贷款与租金互斥）
+  rentTier            String? // tier1 | tier2 | tier3
+  elderlyCare         String   @default("none") // none | only-child | shared
+  elderlyShareAmount  Decimal? @db.Decimal(16, 2)
+
+  // ---- 支出 ----
+  monthlySpend    Decimal @db.Decimal(16, 2)
+  spendGrowthRate Decimal @db.Decimal(8, 6)
+
+  // ---- 公积金 ----
+  hfMonthlyWithdrawal  Decimal @db.Decimal(16, 2)
+  hfAnnualInterestRate Decimal @db.Decimal(8, 6)
+  hfInvestWithdrawal   Boolean @default(true)
+
+  // ---- 投资 ----
+  initialCapital         Decimal @db.Decimal(16, 2)
+  years                  Int
+  expectedAnnualReturn   Decimal @db.Decimal(8, 6)
+  annualVolatility       Decimal @db.Decimal(8, 6)
+  feeDragAnnual          Decimal @db.Decimal(8, 6)
+  dividendYield          Decimal @db.Decimal(8, 6)
+  dividendWithholdingTax Decimal @db.Decimal(8, 6)
+  investRatio            Decimal @db.Decimal(8, 6)
+
+  // ---- 通胀 ----
+  inflationRate Decimal @db.Decimal(8, 6)
+
+  // ---- 缴费参数覆盖（工资条与城市默认值对不上时使用，全部可空）----
+  ovSocialBaseMin  Decimal? @db.Decimal(16, 2)
+  ovSocialBaseMax  Decimal? @db.Decimal(16, 2)
+  ovSocialRateSelf Decimal? @db.Decimal(8, 6)
+  ovHfBaseMin      Decimal? @db.Decimal(16, 2)
+  ovHfBaseMax      Decimal? @db.Decimal(16, 2)
+  ovHfRateSelf     Decimal? @db.Decimal(8, 6)
+  ovHfRateEmployer Decimal? @db.Decimal(8, 6)
+
+  salarySteps SalaryStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// 同一用户下方案名唯一，避免存出两个「基准方案」
+  @@unique([userId, name])
+  @@index([userId, updatedAt])
+  @@map("scenario")
+}
+
+/// 升职/跳槽造成的薪资跳变。这是模型里唯一真正的一对多关系。
+model SalaryStep {
+  id         String   @id @default(cuid())
+  scenarioId String
+  scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  /// 1-based 年序，从该年年初起生效
+  atYear           Int
+  newMonthlySalary Decimal @db.Decimal(16, 2)
+
+  @@unique([scenarioId, atYear])
+  @@index([scenarioId])
+  @@map("salary_step")
+}

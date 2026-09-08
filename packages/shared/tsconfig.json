@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "noEmit": true,
+    // TextEncoder / btoa / URL / URLSearchParams 在浏览器和 Node 20+ 中都存在，
+    // 引入 DOM lib 只是为了拿到类型声明，不代表本包依赖浏览器环境。
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src/**/*"]
+}

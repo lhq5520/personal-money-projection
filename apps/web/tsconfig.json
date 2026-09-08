@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "noEmit": true,
+    // 应用不对外发布类型，关掉声明生成；开着会让 pnpm 隔离目录下的
+    // 第三方推断类型触发 TS2742「无法命名的推断类型」。
+    "declaration": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*"]
+}
