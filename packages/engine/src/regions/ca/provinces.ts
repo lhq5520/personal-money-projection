@@ -154,6 +154,12 @@ export const CA_PROVINCES: readonly ProvinceTax[] = [
   },
 ];
 
+/**
+ * 省级分档数据所属的税年。手工维护——上游 PolicyEngine 的省级数据
+ * 长期停留在 2022–2023 年，比这里还旧，同步反而是倒退。
+ */
+export const PROVINCIAL_DATA_TAX_YEAR = 2025;
+
 export const DEFAULT_PROVINCE = 'ON';
 
 export function getProvince(code: string): ProvinceTax {

@@ -16,13 +16,43 @@ import type {
 import { computeYearIncome, resolveSalarySchedule } from './income.js';
 import { deterministicPath, netAnnualReturn, toMonthlyRate } from './invest.js';
 import { getRegion } from './regions/registry.js';
+import { checkFreshness } from './data/provenance.js';
 
 /** 中国个人年度购汇便利化额度，等值 5 万美元 */
 const FX_QUOTA_USD = 50_000;
 
-export function projectTimeline(input: ProjectionInput, usdCnyRate = 7.2): ProjectionResult {
+export function projectTimeline(
+  input: ProjectionInput,
+  usdCnyRate = 7.2,
+  /**
+   * 注入「现在」而不是读 Date.now()：引擎必须是纯函数，
+   * 否则同样的输入会因为今天几号而给出不同的警告，测试也无从复现。
+   */
+  now: Date = new Date(),
+): ProjectionResult {
   const warnings: ProjectionWarning[] = [];
   const region = getRegion(input.region);
+
+  // 数据时效检查放在最前面：拿两年前的缴费基数做十年期规划，
+  // 比任何计算细节的偏差都更容易让人得出错误结论。
+  const provenance = region.provenanceFor(input.jurisdiction);
+  const freshness = checkFreshness(provenance, now);
+  if (freshness.expired) {
+    warnings.push({
+      code: 'data-expired',
+      params: {
+        jurisdiction: input.jurisdiction,
+        effectiveTo: provenance.effectiveTo ?? '',
+        daysAgo: Math.abs(freshness.daysRemaining ?? 0),
+      },
+    });
+  }
+  if (provenance.confidence === 'estimated') {
+    warnings.push({
+      code: 'data-unverified',
+      params: { jurisdiction: input.jurisdiction, note: provenance.note ?? '' },
+    });
+  }
   const salarySchedule = resolveSalarySchedule(input);
 
   const years: YearIncome[] = salarySchedule.map((salary, i) => computeYearIncome(input, i + 1, salary));

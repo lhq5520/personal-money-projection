@@ -147,6 +147,19 @@ export const zh = {
   'warn.plan-contribution-capped':
     '{plan} 按比例应缴 {requested}，已触及法定年度上限 {limit}，第 {year} 年起按上限计算。',
 
+  'warn.data-expired':
+    '{jurisdiction} 的税率/缴费基数数据适用期已于 {effectiveTo} 结束（{daysAgo} 天前），当前结果基于过期数据。请对照官方最新公告核对，或在界面上直接改成你工资条上的数字。',
+  'warn.data-unverified':
+    '{jurisdiction} 的参数为估算值，只保证量级正确，尚未逐项对照官方公告核对。{note}',
+
+  'data.freshness': '数据口径',
+  'data.verified': '已核对',
+  'data.derived': '按规则推导',
+  'data.estimated': '估算，待核对',
+  'data.effective': '适用期 {from} 至 {to}',
+  'data.verifiedAt': '核对于 {date}',
+  'data.expired': '已过期',
+
   'ctl.title': '你的参数',
   'ctl.group.region': '国家与辖区',
   'ctl.group.income': '收入',

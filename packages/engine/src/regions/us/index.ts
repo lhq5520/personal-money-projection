@@ -9,15 +9,18 @@ import type {
 } from '../../types.js';
 import { bracketTax } from '../../tax/brackets.js';
 import type { Jurisdiction, RegionModule } from '../types.js';
+import { calendarYear } from '../../data/provenance.js';
+import type { Provenance } from '../../data/provenance.js';
 import {
   ELECTIVE_DEFERRAL_LIMIT,
+  US_DATA_SYNCED_AT,
   FEDERAL_BRACKETS,
   FEDERAL_STANDARD_DEDUCTION,
   US_TAX_YEAR,
   childTaxCredit,
   computeFica,
 } from './federal.js';
-import { DEFAULT_STATE, US_STATES, getState } from './states.js';
+import { DEFAULT_STATE, STATE_DATA_TAX_YEAR, US_STATES, getState } from './states.js';
 
 /** 州级税率表只区分「单身档」与「已婚合并档」 */
 const stateBand = (status: UsFilingStatus): 'single' | 'married' =>
@@ -129,4 +132,21 @@ export const US_REGION: RegionModule = {
   defaultJurisdiction: DEFAULT_STATE,
   planAnnualLimit: ELECTIVE_DEFERRAL_LIMIT,
   computeYear,
+  provenanceFor: (jurisdiction): Provenance => {
+    const state = getState(jurisdiction);
+    // 联邦分档由 data:sync 同步到当前税年；州级分档目前仍是手工维护的 2025 值。
+    // 取两者中更旧的年份作为该辖区的整体口径——一个组件过期，结论就不能算新鲜。
+    const stateYear = STATE_DATA_TAX_YEAR;
+    const effectiveYear = Math.min(US_TAX_YEAR, state.brackets ? stateYear : US_TAX_YEAR);
+    return {
+      ...calendarYear(effectiveYear),
+      sourceUrl: 'https://github.com/PolicyEngine/policyengine-us',
+      verifiedAt: US_DATA_SYNCED_AT,
+      confidence: state.approximate ? 'estimated' : 'derived',
+      note:
+        state.brackets && stateYear < US_TAX_YEAR
+          ? `联邦分档已同步至 ${US_TAX_YEAR} 税年，州级分档仍为 ${stateYear} 税年的手工值`
+          : undefined,
+    };
+  },
 };

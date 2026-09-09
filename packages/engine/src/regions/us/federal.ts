@@ -1,66 +1,41 @@
 /**
- * 美国联邦个人所得税与 FICA（2025 税年）。
+ * 美国联邦个人所得税与 FICA。
  *
- * ⚠️ 税率表与各项限额每年随通胀调整（IRS Rev. Proc. 公布）。
- * 下列数值为 2025 税年，请在使用前核对当年的官方数字。
+ * 税率表、标准扣除与社保工资基数上限**不再硬编码**，而是由
+ * `pnpm data:sync` 从 PolicyEngine 拉取后生成到 data/generated/us.json。
+ * 那份数据按生效日期分版本、带法条引用，能正确反映年中生效的变更——
+ * 例如 2025 年 7 月 OBBBA 追溯把单身标准扣除由 15,000 提高到 15,750。
+ *
+ * 仍然硬编码在本文件里的是**税法结构**（费率、起征点规则、抵免公式），
+ * 这些变动频率远低于金额，且变动时需要改代码而不只是改数字。
  */
 
 import type { TaxBracket, UsFilingStatus } from '../../types.js';
+import { US_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 
-export const US_TAX_YEAR = 2025;
+export const US_TAX_YEAR = US_GENERATED.taxYear;
+export const US_DATA_SYNCED_AT = US_GENERATED.syncedAt;
 
 /** 联邦普通所得税率表。美国的表不使用速算扣除数，由引擎逐档累进计算。 */
 export const FEDERAL_BRACKETS: Record<UsFilingStatus, readonly TaxBracket[]> = {
-  single: [
-    { upTo: 11_925, rate: 0.1 },
-    { upTo: 48_475, rate: 0.12 },
-    { upTo: 103_350, rate: 0.22 },
-    { upTo: 197_300, rate: 0.24 },
-    { upTo: 250_525, rate: 0.32 },
-    { upTo: 626_350, rate: 0.35 },
-    { upTo: Number.POSITIVE_INFINITY, rate: 0.37 },
-  ],
-  'married-joint': [
-    { upTo: 23_850, rate: 0.1 },
-    { upTo: 96_950, rate: 0.12 },
-    { upTo: 206_700, rate: 0.22 },
-    { upTo: 394_600, rate: 0.24 },
-    { upTo: 501_050, rate: 0.32 },
-    { upTo: 751_600, rate: 0.35 },
-    { upTo: Number.POSITIVE_INFINITY, rate: 0.37 },
-  ],
-  'married-separate': [
-    { upTo: 11_925, rate: 0.1 },
-    { upTo: 48_475, rate: 0.12 },
-    { upTo: 103_350, rate: 0.22 },
-    { upTo: 197_300, rate: 0.24 },
-    { upTo: 250_525, rate: 0.32 },
-    { upTo: 375_800, rate: 0.35 },
-    { upTo: Number.POSITIVE_INFINITY, rate: 0.37 },
-  ],
-  'head-of-household': [
-    { upTo: 17_000, rate: 0.1 },
-    { upTo: 64_850, rate: 0.12 },
-    { upTo: 103_350, rate: 0.22 },
-    { upTo: 197_300, rate: 0.24 },
-    { upTo: 250_500, rate: 0.32 },
-    { upTo: 626_350, rate: 0.35 },
-    { upTo: Number.POSITIVE_INFINITY, rate: 0.37 },
-  ],
+  single: restoreBrackets(US_GENERATED.brackets.single ?? []),
+  'married-joint': restoreBrackets(US_GENERATED.brackets['married-joint'] ?? []),
+  'married-separate': restoreBrackets(US_GENERATED.brackets['married-separate'] ?? []),
+  'head-of-household': restoreBrackets(US_GENERATED.brackets['head-of-household'] ?? []),
 };
 
 export const FEDERAL_STANDARD_DEDUCTION: Record<UsFilingStatus, number> = {
-  single: 15_000,
-  'married-joint': 30_000,
-  'married-separate': 15_000,
-  'head-of-household': 22_500,
+  single: US_GENERATED.standardDeduction.single!,
+  'married-joint': US_GENERATED.standardDeduction['married-joint']!,
+  'married-separate': US_GENERATED.standardDeduction['married-separate']!,
+  'head-of-household': US_GENERATED.standardDeduction['head-of-household']!,
 };
 
 /* --------------------------------------------------------------- FICA */
 
 export const SOCIAL_SECURITY_RATE = 0.062;
-/** 社会保障税的工资基数上限，每年调整 */
-export const SOCIAL_SECURITY_WAGE_BASE = 176_100;
+/** 社会保障税的工资基数上限，每年随全国平均工资指数调整 */
+export const SOCIAL_SECURITY_WAGE_BASE = US_GENERATED.socialSecurityWageBase;
 export const MEDICARE_RATE = 0.0145;
 export const ADDITIONAL_MEDICARE_RATE = 0.009;
 

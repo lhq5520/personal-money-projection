@@ -10,14 +10,17 @@ import { clamp } from '../../tax/brackets.js';
 import {
   CN_MEDICAL_RATE,
   CN_PENSION_RATE,
+  baseRangeFor,
   housingFundBaseRange,
-  socialBaseRange,
   type CityProfile,
 } from './cities.js';
 import { DEDUCTION_STANDARDS } from './tax.js';
 
 export interface CnContributions {
+  /** 养老保险的缴费基数（通常意义上的「社保基数」） */
   socialBase: number;
+  /** 医疗保险的缴费基数。广东各市与养老基数不同，故单列 */
+  medicalBase: number;
   housingFundBase: number;
   breakdown: ContributionComponent[];
   socialTotal: number;
@@ -34,31 +37,44 @@ export function computeContributions(
   city: CityProfile,
   overrides?: ContributionOverrides,
 ): CnContributions {
-  const s = socialBaseRange(city);
   const h = housingFundBaseRange(city);
-
-  const socialMin = overrides?.socialBaseMin ?? s.min;
-  const socialMax = overrides?.socialBaseMax ?? s.max;
   const hfMin = overrides?.planBaseMin ?? h.min;
   const hfMax = overrides?.planBaseMax ?? h.max;
-
-  const socialBase = clamp(monthlySalary, socialMin, socialMax);
   const housingFundBase = clamp(monthlySalary, hfMin, hfMax);
 
   const hfRateSelf = overrides?.planRateSelf ?? city.hfRateDefault;
   const hfRateEmployer = overrides?.planRateEmployer ?? hfRateSelf;
 
   const nominalRate = CN_PENSION_RATE + CN_MEDICAL_RATE + city.unemployment;
-  // 用户直接给了社保合计费率时，按各险种原有占比拆分，仅用于明细展示
-  const scale = overrides?.socialRateSelf !== undefined && nominalRate > 0
-    ? overrides.socialRateSelf / nominalRate
-    : 1;
+  // 用户直接给了社保合计费率时，按各险种原有占比等比缩放，仅用于明细展示
+  const scale =
+    overrides?.socialRateSelf !== undefined && nominalRate > 0
+      ? overrides.socialRateSelf / nominalRate
+      : 1;
 
-  const socialBaseCapped = monthlySalary > socialMax;
+  /**
+   * 逐险种取基数。这一步不能合并成「一个社保基数」——
+   * 广东各市的养老按省级统筹、医疗按市级统筹，两者上下限完全不同
+   * （深圳养老上限 27,549，医保上限 33,633）。用统一基数会算错。
+   *
+   * overrides 里的 socialBaseMin/Max 是全局覆盖，会同时作用于三个险种。
+   */
+  const item = (kind: 'pension' | 'medical' | 'unemployment', rate: number) => {
+    const r = baseRangeFor(city, kind);
+    const min = overrides?.socialBaseMin ?? r.min;
+    const max = overrides?.socialBaseMax ?? r.max;
+    const base = clamp(monthlySalary, min, max);
+    return { base, amount: base * rate * scale, capped: monthlySalary > max };
+  };
+
+  const pension = item('pension', CN_PENSION_RATE);
+  const medical = item('medical', CN_MEDICAL_RATE);
+  const unemployment = item('unemployment', city.unemployment);
+
   const breakdown: ContributionComponent[] = [
-    { code: 'cn-pension', amount: socialBase * CN_PENSION_RATE * scale, capped: socialBaseCapped },
-    { code: 'cn-medical', amount: socialBase * CN_MEDICAL_RATE * scale, capped: socialBaseCapped },
-    { code: 'cn-unemployment', amount: socialBase * city.unemployment * scale, capped: socialBaseCapped },
+    { code: 'cn-pension', amount: pension.amount, capped: pension.capped },
+    { code: 'cn-medical', amount: medical.amount, capped: medical.capped },
+    { code: 'cn-unemployment', amount: unemployment.amount, capped: unemployment.capped },
   ];
 
   const socialTotal = breakdown.reduce((sum, b) => sum + b.amount, 0);
@@ -66,14 +82,16 @@ export function computeContributions(
   const housingFundEmployer = housingFundBase * hfRateEmployer;
 
   return {
-    socialBase,
+    // 养老基数是通常意义上的「社保基数」，明细里另有逐险种数据
+    socialBase: pension.base,
+    medicalBase: medical.base,
     housingFundBase,
     breakdown,
     socialTotal,
     housingFundSelf,
     housingFundEmployer,
     taxDeductible: socialTotal + housingFundSelf,
-    socialBaseCapped,
+    socialBaseCapped: pension.capped || medical.capped || unemployment.capped,
     housingFundBaseCapped: monthlySalary > hfMax,
   };
 }

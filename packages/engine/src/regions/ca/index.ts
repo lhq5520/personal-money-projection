@@ -8,7 +8,10 @@ import type {
 } from '../../types.js';
 import { bracketTax, nonRefundableCredit } from '../../tax/brackets.js';
 import type { Jurisdiction, RegionModule } from '../types.js';
+import { calendarYear } from '../../data/provenance.js';
+import type { Provenance } from '../../data/provenance.js';
 import {
+  CA_DATA_SYNCED_AT,
   CA_TAX_YEAR,
   FEDERAL_BPA,
   FEDERAL_BRACKETS,
@@ -17,7 +20,13 @@ import {
   computePayroll,
   rrspRoom,
 } from './federal.js';
-import { CA_PROVINCES, DEFAULT_PROVINCE, computeSurtax, getProvince } from './provinces.js';
+import {
+  CA_PROVINCES,
+  DEFAULT_PROVINCE,
+  PROVINCIAL_DATA_TAX_YEAR,
+  computeSurtax,
+  getProvince,
+} from './provinces.js';
 
 function computeYear(input: ProjectionInput, year: number, monthlySalary: number): YearIncome {
   const province = getProvince(input.jurisdiction);
@@ -120,4 +129,13 @@ export const CA_REGION: RegionModule = {
   defaultJurisdiction: DEFAULT_PROVINCE,
   planAnnualLimit: RRSP_DOLLAR_LIMIT,
   computeYear,
+  provenanceFor: (): Provenance => ({
+    // 省级分档是手工维护的：上游 PolicyEngine 的省级数据停留在 2022–2023 年，
+    // 比本仓库还旧，因此以省级数据的年份为准，而不是联邦的同步年份。
+    ...calendarYear(PROVINCIAL_DATA_TAX_YEAR),
+    sourceUrl: 'https://www.canada.ca/en/revenue-agency/services/tax/individuals/frequently-asked-questions-individuals/canadian-income-tax-rates-individuals-current-previous-years.html',
+    verifiedAt: CA_DATA_SYNCED_AT,
+    confidence: 'estimated',
+    note: `联邦分档已同步至 ${CA_TAX_YEAR} 税年，省级分档为 ${PROVINCIAL_DATA_TAX_YEAR} 税年的手工值`,
+  }),
 };

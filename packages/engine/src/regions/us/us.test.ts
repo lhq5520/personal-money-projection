@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { US_REGION } from './index.js';
 import {
   ELECTIVE_DEFERRAL_LIMIT,
+  FEDERAL_BRACKETS,
+  FEDERAL_STANDARD_DEDUCTION,
   SOCIAL_SECURITY_WAGE_BASE,
+  US_TAX_YEAR,
   childTaxCredit,
   computeFica,
 } from './federal.js';
+import { bracketTax } from '../../tax/brackets.js';
 import { getState } from './states.js';
 import { defaultInput } from '../../defaults.js';
 import type { ProjectionInput } from '../../types.js';
@@ -56,13 +60,40 @@ describe('FICA', () => {
 });
 
 describe('联邦所得税（黄金用例）', () => {
-  it('单身、年薪 10 万、加州、无 401(k)：逐档累进结果可手算复核', () => {
+  it('单身、年薪 10 万、加州、无 401(k)：应税所得 = 收入 − 标准扣除', () => {
     const y = atSalary(100_000);
-    // 应税所得 = 100,000 − 15,000 标准扣除 = 85,000
-    expect(y.taxableAnnual).toBeCloseTo(85_000, 2);
-    // 11,925×10% + 36,550×12% + 36,525×22%
+    // 不写死数字：标准扣除来自同步数据，随税年变化。写死会让测试在数据更新后误报。
+    const sd = FEDERAL_STANDARD_DEDUCTION.single;
+    expect(y.taxableAnnual).toBeCloseTo(100_000 - sd, 2);
+  });
+
+  it('联邦税额与逐档累进的独立计算一致', () => {
+    const y = atSalary(100_000);
     const federal = y.taxBreakdown.find((t) => t.code === 'national')!.amount;
-    expect(federal).toBeCloseTo(1_192.5 + 4_386 + 8_035.5, 2);
+    // 用通用累进引擎独立复算一遍，交叉验证 us/index.ts 的组装逻辑
+    expect(federal).toBeCloseTo(bracketTax(FEDERAL_BRACKETS.single, y.taxableAnnual), 2);
+  });
+
+  it('标准扣除随税年同步，且已反映 OBBBA 的调整', () => {
+    // 2025 年 7 月 OBBBA 追溯把单身标准扣除由 15,000 提高到 15,750，此后逐年通胀调整。
+    // 任何等于旧值 15,000 的情况都说明同步数据没跟上。
+    expect(FEDERAL_STANDARD_DEDUCTION.single).toBeGreaterThan(15_000);
+    expect(FEDERAL_STANDARD_DEDUCTION['married-joint']).toBeCloseTo(
+      FEDERAL_STANDARD_DEDUCTION.single * 2,
+      0,
+    );
+    expect(US_TAX_YEAR).toBeGreaterThanOrEqual(2025);
+  });
+
+  it('七档税率齐全且单调递增，最高档无上界', () => {
+    for (const rows of Object.values(FEDERAL_BRACKETS)) {
+      expect(rows).toHaveLength(7);
+      expect(rows.map((b) => b.rate)).toEqual([0.1, 0.12, 0.22, 0.24, 0.32, 0.35, 0.37]);
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i]!.upTo).toBeGreaterThan(rows[i - 1]!.upTo);
+      }
+      expect(rows.at(-1)!.upTo).toBe(Number.POSITIVE_INFINITY);
+    }
   });
 
   it('加州州税按其九档表逐档累进', () => {

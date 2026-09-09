@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CA_REGION } from './index.js';
+import { bracketTax } from '../../tax/brackets.js';
 import {
   CPP_BASIC_EXEMPTION,
+  FEDERAL_BRACKETS,
   EI_MAX_INSURABLE,
   FEDERAL_BPA,
   QUEBEC_ABATEMENT,
@@ -68,13 +70,22 @@ describe('CPP 与 EI', () => {
 });
 
 describe('联邦与省税（黄金用例）', () => {
-  it('安大略、年薪 10 万、无 RRSP：联邦税可手算复核', () => {
+  it('安大略、年薪 10 万、无 RRSP：联邦税可逐档手算复核', () => {
     const y = atSalary(100_000, 'ON');
     const federal = y.taxBreakdown.find((t) => t.code === 'national')!.amount;
-    const before = 57_375 * 0.145 + (100_000 - 57_375) * 0.205;
-    const credit = FEDERAL_BPA * 0.145;
+    // 税率取自同步数据而非写死：2025 是过渡年（14.5% 混合税率），2026 起为 14%，
+    // 写死任何一个都会在数据更新后误报。
+    const r1 = FEDERAL_BRACKETS[0]!.rate;
+    const b1 = FEDERAL_BRACKETS[0]!.upTo;
+    const r2 = FEDERAL_BRACKETS[1]!.rate;
+    const before = b1 * r1 + (100_000 - b1) * r2;
+    const credit = FEDERAL_BPA * r1; // 不可退还抵免按最低档折算
     expect(federal).toBeCloseTo(before - credit, 2);
-    expect(federal).toBeCloseTo(14_718.795, 2);
+  });
+
+  it('最低档税率反映 2025 年 7 月起的下调（15% → 14%，2025 全年为 14.5% 混合）', () => {
+    expect(FEDERAL_BRACKETS[0]!.rate).toBeLessThan(0.15);
+    expect(FEDERAL_BRACKETS[0]!.rate).toBeGreaterThanOrEqual(0.14);
   });
 
   it('安大略省税与附加税可手算复核', () => {
@@ -104,13 +115,12 @@ describe('联邦与省税（黄金用例）', () => {
     const high = atSalary(400_000, 'ON');
     const lowFed = low.taxBreakdown.find((t) => t.code === 'national')!.amount;
     const highFed = high.taxBreakdown.find((t) => t.code === 'national')!.amount;
-    const lowBefore = 40_000 * 0.145;
-    expect(lowBefore - lowFed).toBeCloseTo(FEDERAL_BPA * 0.145, 2);
-    // 抵免金额与收入无关，两者省下的绝对额相同
-    const highBefore =
-      57_375 * 0.145 + (114_750 - 57_375) * 0.205 + (177_882 - 114_750) * 0.26 +
-      (253_414 - 177_882) * 0.29 + (400_000 - 253_414) * 0.33;
-    expect(highBefore - highFed).toBeCloseTo(FEDERAL_BPA * 0.145, 2);
+    const r1 = FEDERAL_BRACKETS[0]!.rate;
+    const lowBefore = 40_000 * r1;
+    expect(lowBefore - lowFed).toBeCloseTo(FEDERAL_BPA * r1, 2);
+    // 抵免金额与收入无关，两者省下的绝对额相同——这正是「抵免」区别于「扣除」之处
+    const highBefore = bracketTax(FEDERAL_BRACKETS, 400_000);
+    expect(highBefore - highFed).toBeCloseTo(FEDERAL_BPA * r1, 2);
   });
 
   it('艾伯塔的基本个人金额更高，免税线也更高', () => {

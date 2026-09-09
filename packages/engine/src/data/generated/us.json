@@ -1,0 +1,134 @@
+{
+  "taxYear": 2026,
+  "syncedAt": "2026-09-09",
+  "source": "PolicyEngine/policyengine-us",
+  "brackets": {
+    "single": [
+      {
+        "upTo": 12400,
+        "rate": 0.1
+      },
+      {
+        "upTo": 50400,
+        "rate": 0.12
+      },
+      {
+        "upTo": 105700,
+        "rate": 0.22
+      },
+      {
+        "upTo": 201775,
+        "rate": 0.24
+      },
+      {
+        "upTo": 256225,
+        "rate": 0.32
+      },
+      {
+        "upTo": 640600,
+        "rate": 0.35
+      },
+      {
+        "upTo": null,
+        "rate": 0.37
+      }
+    ],
+    "married-joint": [
+      {
+        "upTo": 24800,
+        "rate": 0.1
+      },
+      {
+        "upTo": 100800,
+        "rate": 0.12
+      },
+      {
+        "upTo": 211400,
+        "rate": 0.22
+      },
+      {
+        "upTo": 403550,
+        "rate": 0.24
+      },
+      {
+        "upTo": 512450,
+        "rate": 0.32
+      },
+      {
+        "upTo": 768700,
+        "rate": 0.35
+      },
+      {
+        "upTo": null,
+        "rate": 0.37
+      }
+    ],
+    "married-separate": [
+      {
+        "upTo": 12400,
+        "rate": 0.1
+      },
+      {
+        "upTo": 50400,
+        "rate": 0.12
+      },
+      {
+        "upTo": 105700,
+        "rate": 0.22
+      },
+      {
+        "upTo": 201775,
+        "rate": 0.24
+      },
+      {
+        "upTo": 256225,
+        "rate": 0.32
+      },
+      {
+        "upTo": 384350,
+        "rate": 0.35
+      },
+      {
+        "upTo": null,
+        "rate": 0.37
+      }
+    ],
+    "head-of-household": [
+      {
+        "upTo": 17700,
+        "rate": 0.1
+      },
+      {
+        "upTo": 67450,
+        "rate": 0.12
+      },
+      {
+        "upTo": 105700,
+        "rate": 0.22
+      },
+      {
+        "upTo": 201750,
+        "rate": 0.24
+      },
+      {
+        "upTo": 256200,
+        "rate": 0.32
+      },
+      {
+        "upTo": 640600,
+        "rate": 0.35
+      },
+      {
+        "upTo": null,
+        "rate": 0.37
+      }
+    ]
+  },
+  "standardDeduction": {
+    "single": 16100,
+    "married-joint": 32200,
+    "married-separate": 16100,
+    "head-of-household": 24150
+  },
+  "socialSecurityWageBase": 184500
+}

@@ -7,6 +7,7 @@ import type {
   RegionCode,
   YearIncome,
 } from '../types.js';
+import type { Provenance } from '../data/provenance.js';
 
 /** 双语名称。引擎不做翻译，只把两种写法都带上，由 UI 按当前语言取用。 */
 export interface LocalizedName {
@@ -40,6 +41,12 @@ export interface RegionModule {
   planAnnualLimit?: number;
 
   computeYear(input: ProjectionInput, year: number, monthlySalary: number): YearIncome;
+
+  /**
+   * 该辖区当前所用数据的出处与时效。
+   * 引擎据此产出过期警告——绝不静默地拿两年前的缴费基数给人做十年期规划。
+   */
+  provenanceFor(jurisdiction: string): Provenance;
 }
 
 export function findJurisdiction(m: RegionModule, code: string): Jurisdiction {

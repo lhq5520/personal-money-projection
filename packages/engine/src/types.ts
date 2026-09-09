@@ -297,7 +297,11 @@ export type WarningCode =
   /** 不同年份的年终奖最优计税方式不同 */
   | 'bonus-strategy-mixed'
   /** 401(k) / RRSP 缴纳额触及法定年度上限 */
-  | 'plan-contribution-capped';
+  | 'plan-contribution-capped'
+  /** 当前辖区的税率/缴费基数数据已过适用期 */
+  | 'data-expired'
+  /** 当前辖区的数据未经核对，只保证量级正确 */
+  | 'data-unverified';
 
 export interface ProjectionWarning {
   code: WarningCode;

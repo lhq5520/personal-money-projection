@@ -4,6 +4,8 @@ import {
   CN_CITIES,
   CN_MEDICAL_RATE,
   CN_PENSION_RATE,
+  baseRangeFor,
+  derivedBase,
   getCity,
   housingFundBaseRange,
   socialBaseRange,
@@ -34,10 +36,11 @@ describe('缴费基数按法规推导', () => {
     expect(housingFundBaseRange(shanghai).min).toBe(shanghai.minWage);
   });
 
-  it('部分城市的下限另有规定，用显式覆盖表达（深圳按最低工资）', () => {
+  it('部分城市的基数另有规定，用显式覆盖表达', () => {
     const sz = getCity('shenzhen');
-    expect(socialBaseRange(sz).min).toBe(2_360);
-    expect(socialBaseRange(sz).min).not.toBe(Math.round(sz.avgWage * 0.6));
+    // 深圳养老按省级统筹，下限不等于「本地社平 × 60%」
+    expect(socialBaseRange(sz).min).toBe(4_775);
+    expect(socialBaseRange(sz).min).not.toBe(derivedBase(sz).min);
   });
 });
 
@@ -76,12 +79,13 @@ describe('缴费基数上下限', () => {
     expect(c.taxDeductible).toBeCloseTo(c.socialTotal + c.housingFundSelf, 9);
   });
 
-  it('公积金基数与社保基数各自独立封顶', () => {
+  it('公积金基数与养老基数各自独立封顶', () => {
     const sz = getCity('shenzhen');
+    const hf = housingFundBaseRange(sz);
     const c = computeContributions(35_000, sz);
-    expect(c.socialBase).toBe(socialBaseRange(sz).max); // 27927，已封顶
-    expect(c.housingFundBase).toBe(35_000); // 公积金上限 40260，未封顶
-    expect(c.socialBaseCapped).toBe(true);
+    expect(c.socialBase).toBe(socialBaseRange(sz).max); // 养老 27,549，已封顶
+    expect(c.housingFundBase).toBe(35_000); // 公积金上限 40,260，未封顶
+    expect(hf.max).toBeGreaterThan(socialBaseRange(sz).max);
     expect(c.housingFundBaseCapped).toBe(false);
   });
 
@@ -95,6 +99,46 @@ describe('缴费基数上下限', () => {
     expect(c.socialTotal).toBeCloseTo(20_000 * 0.08, 6);
     expect(c.housingFundSelf).toBeCloseTo(20_000 * 0.12, 6);
     expect(c.housingFundEmployer).toBeCloseTo(20_000 * 0.05, 6);
+  });
+});
+
+describe('逐险种基数（广东各市养老与医疗分别统筹）', () => {
+  it('深圳养老与医疗的基数区间不同——用统一基数会算错', () => {
+    const sz = getCity('shenzhen');
+    const pension = baseRangeFor(sz, 'pension');
+    const medical = baseRangeFor(sz, 'medical');
+    expect(pension.max).toBe(27_549);
+    expect(medical.max).toBe(33_633);
+    expect(medical.max).not.toBe(pension.max);
+    expect(medical.min).not.toBe(pension.min);
+  });
+
+  it('月薪落在两个上限之间时，养老已封顶而医疗未封顶', () => {
+    const sz = getCity('shenzhen');
+    const c = computeContributions(30_000, sz); // 27,549 < 30,000 < 33,633
+    const pension = c.breakdown.find((b) => b.code === 'cn-pension')!;
+    const medical = c.breakdown.find((b) => b.code === 'cn-medical')!;
+    expect(pension.capped).toBe(true);
+    expect(medical.capped).toBe(false);
+    expect(pension.amount).toBeCloseTo(27_549 * CN_PENSION_RATE, 2);
+    expect(medical.amount).toBeCloseTo(30_000 * CN_MEDICAL_RATE, 2);
+    expect(c.socialBase).toBe(27_549);
+    expect(c.medicalBase).toBe(30_000);
+  });
+
+  it('若沿用旧的「单一社保基数」模型，深圳高薪者的医保会被少算', () => {
+    const sz = getCity('shenzhen');
+    const c = computeContributions(32_000, sz);
+    const medical = c.breakdown.find((b) => b.code === 'cn-medical')!.amount;
+    const legacy = 27_549 * CN_MEDICAL_RATE; // 旧模型：医保也按养老上限封顶
+    expect(medical).toBeGreaterThan(legacy);
+  });
+
+  it('未指定逐险种基数的城市，三个险种共用推导值', () => {
+    const sh = getCity('shanghai');
+    for (const k of ['pension', 'medical', 'unemployment'] as const) {
+      expect(baseRangeFor(sh, k)).toEqual(derivedBase(sh));
+    }
   });
 });
 

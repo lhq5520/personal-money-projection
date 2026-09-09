@@ -14,6 +14,7 @@ import { TimelineTable } from './components/TimelineTable.js';
 import { Warnings } from './components/Warnings.js';
 import { SyncPanel } from './components/SyncPanel.js';
 import { Disclaimer } from './components/Disclaimer.js';
+import { DataBadge } from './components/DataBadge.js';
 
 /** 启动时的参数优先级：分享链接 > 本地存档 > 默认值 */
 function initialInput(): ProjectionInputDTO {
@@ -116,11 +117,14 @@ export function App() {
                 <button aria-pressed={mode === 'nominal'} onClick={() => setMode('nominal')}>{t('mode.nominal')}</button>
                 <button aria-pressed={mode === 'real'} onClick={() => setMode('real')}>{t('mode.real')}</button>
               </div>
-              <span className="muted">
-                {mode === 'real'
-                  ? t('mode.realNote', { rate: fmt.percent(input.inflation.annualRate) })
-                  : t('mode.nominalNote')}
-              </span>
+              <div className="btn-row">
+                <DataBadge region={input.region} jurisdiction={input.jurisdiction} />
+                <span className="muted">
+                  {mode === 'real'
+                    ? t('mode.realNote', { rate: fmt.percent(input.inflation.annualRate) })
+                    : t('mode.nominalNote')}
+                </span>
+              </div>
             </div>
             <MetricCards result={result} mc={mc} mode={mode} />
           </div>

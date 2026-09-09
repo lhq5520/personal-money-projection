@@ -325,6 +325,15 @@ export const US_STATES: readonly StateTax[] = [
   },
 ];
 
+/**
+ * 州级分档数据所属的税年。
+ *
+ * 联邦分档由 data:sync 自动同步，州级则是手工维护——51 个州的上游 YAML 结构各异，
+ * 逐个解析不现实。改用 `pnpm data:verify` 对 PolicyEngine 实时 API 做差分验证，
+ * 州级数据漂移会在那里显现为超出容差的差异。
+ */
+export const STATE_DATA_TAX_YEAR = 2025;
+
 export const DEFAULT_STATE = 'CA';
 
 export function getState(code: string): StateTax {

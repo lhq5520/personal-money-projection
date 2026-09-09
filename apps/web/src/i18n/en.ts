@@ -144,6 +144,19 @@ export const en: Dict = {
   'warn.plan-contribution-capped':
     '{plan} contributions of {requested} at the chosen rate hit the statutory annual limit of {limit}; from year {year} the limit applies.',
 
+  'warn.data-expired':
+    'Tax and contribution data for {jurisdiction} stopped applying on {effectiveTo} ({daysAgo} days ago), so these results rest on expired figures. Check the latest official notice, or just type the numbers from your payslip into the fields.',
+  'warn.data-unverified':
+    'Parameters for {jurisdiction} are estimates — the right order of magnitude, but not yet checked line by line against the official notice. {note}',
+
+  'data.freshness': 'Data',
+  'data.verified': 'Verified',
+  'data.derived': 'Rule-derived',
+  'data.estimated': 'Estimated, unverified',
+  'data.effective': 'Effective {from} to {to}',
+  'data.verifiedAt': 'Checked {date}',
+  'data.expired': 'Expired',
+
   'ctl.title': 'Your parameters',
   'ctl.group.region': 'Country and jurisdiction',
   'ctl.group.income': 'Income',

@@ -1,23 +1,24 @@
 /**
- * 加拿大联邦个人所得税、CPP 与 EI（2025 税年）。
+ * 加拿大联邦个人所得税、CPP 与 EI。
  *
- * ⚠️ 2025 是过渡年：最低档联邦税率自 2025-07-01 起由 15% 降至 14%，
- * 因此 2025 全年适用的是 **14.5% 的混合税率**，2026 起为 14%。
- * 这里采用 14.5%（2025 税年口径）。若你在为 2026 及以后做规划，请把它改成 14%。
+ * 联邦税率表由 `pnpm data:sync` 从 PolicyEngine 生成，按生效日期取值，
+ * 因此能正确处理年中生效的变更：最低档联邦税率自 2025-07-01 起由 15% 降至 14%，
+ * 2025 全年适用 14.5% 的混合税率，2026 起为 14%。
+ *
+ * **省级税率表不走同步**——上游的省级数据长期停留在 2022–2023 年，
+ * 比本仓库手工核对的值还旧，盲目采信会造成倒退。见 provinces.ts。
+ *
+ * CPP/EI 的各项限额与基本个人金额目前仍为手工维护。
  */
 
 import type { TaxBracket } from '../../types.js';
+import { CA_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 
-export const CA_TAX_YEAR = 2025;
+export const CA_TAX_YEAR = CA_GENERATED.taxYear;
+export const CA_DATA_SYNCED_AT = CA_GENERATED.syncedAt;
 
-/** 联邦税率表。最低档为 2025 过渡年的混合税率。 */
-export const FEDERAL_BRACKETS: readonly TaxBracket[] = [
-  { upTo: 57_375, rate: 0.145 },
-  { upTo: 114_750, rate: 0.205 },
-  { upTo: 177_882, rate: 0.26 },
-  { upTo: 253_414, rate: 0.29 },
-  { upTo: Number.POSITIVE_INFINITY, rate: 0.33 },
-];
+/** 联邦税率表（同步自 PolicyEngine，按生效日期取当前税年的值） */
+export const FEDERAL_BRACKETS: readonly TaxBracket[] = restoreBrackets(CA_GENERATED.federalBrackets);
 
 /** 联邦基本个人金额。高收入者会逐步递减至 14,538，此处不建模该递减。 */
 export const FEDERAL_BPA = 16_129;

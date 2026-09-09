@@ -89,6 +89,43 @@ pnpm dev                      # 前端 :5173，API :8787
 如果你更看重隐私上限，可以改成端到端加密：把 `Scenario` 换成 `ciphertext Bytes` 单列，
 在浏览器里用 WebCrypto 加密后再上传。代价是忘记密码即丢数据，且服务端侧功能全部要挪到客户端。
 
+## 数据来源与更新机制
+
+**三个国家都没有官方的税率 API。** 税率表由立法和行政公告发布（IRS Rev. Proc.、CRA 网页、
+各地人社局年度公告），不是数据服务。所以这里做的不是"实时数据源"，而是一套
+**让数据永远不会被静默地用旧**的机制。
+
+| | 上游 | 自动化程度 |
+|---|---|---|
+| 🇺🇸 美国联邦 | [PolicyEngine/policyengine-us](https://github.com/PolicyEngine/policyengine-us) —— 按生效日期分版本、带法条引用的 YAML | ✅ `pnpm data:sync` 全自动 |
+| 🇺🇸 美国州级 | 同上，但 51 州的 YAML 结构各异 | ⚠️ 手工维护 + 差分验证兜底 |
+| 🇨🇦 加拿大联邦 | [PolicyEngine/policyengine-canada](https://github.com/PolicyEngine/policyengine-canada) | ✅ `pnpm data:sync` 全自动 |
+| 🇨🇦 加拿大省级 | 同上，但**上游停留在 2022–2023 年，比本仓库还旧** | ⚠️ 手工维护，同步脚本会主动警告不要采信上游 |
+| 🇨🇳 中国 | 无。国家统计局 easyquery 对自动化访问返回 `403 UrlACL` | ❌ `pnpm data:check:cn` 变更检测 + 人工核对 |
+
+### 三条命令
+
+```bash
+pnpm data:sync            # 从 PolicyEngine 拉美加参数，报告差异（加 --write 才写文件）
+pnpm data:check:cn        # 报告中国数据时效 + 检测官方页面数字有无变动
+pnpm data:verify          # 把同一批家庭喂给本引擎和 PolicyEngine 实时 API，比对结果
+```
+
+`data:verify` 是最有价值的一条：同步只能保证"数字抄对了"，差分验证才能抓住
+"算法用错了"。当前结果——联邦税在 $45k/$90k/$180k 三档、所有州**完全相等**；
+$400k 时德州仍完全相等而加州/纽约有差，原因是 PolicyEngine 建模了 SALT 分项抵扣，
+属已知的建模范围差异。
+
+[.github/workflows/data-sync.yml](.github/workflows/data-sync.yml) 每周跑一次这三条命令，
+有变更就自动开 PR，**但不自动合并**——上游自己也会过期，需要人判断。
+
+### 数据永远不会被静默使用
+
+每个辖区的数据都带 `Provenance`：适用期、来源 URL、核对日期、可信度
+（`verified` / `derived` / `estimated`）。引擎在数据过期或未核对时会产出结构化警告，
+界面上有醒目的数据口径徽标。一个财务工具最容易骗人的地方不是算错，
+而是拿两年前的参数算得一丝不苟。
+
 ## ⚠️ 关于数据准确性
 
 - **城市社保参数是近似默认值**，来自 2024–2025 社保年度的公布数据。基数上下限每年随社平工资调整，

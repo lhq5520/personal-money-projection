@@ -1,0 +1,54 @@
+name: 税率数据同步
+
+# 每周一 06:00 UTC 跑一次。税率变更是年度事件，但美国 IRS 的通胀调整、
+# 加拿大的年中生效条款、中国 7 月的社保年度切换分散在全年，
+# 每周检查一次足以在变更后几天内发现，又不会把上游的公益 API 打爆。
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: 同步美加参数
+        run: pnpm --filter @pmp/engine data:sync -- --write
+
+      - name: 检查中国数据时效与官方页面变更
+        # 中国没有可自动同步的源，这一步只产出报告供人工处理，失败不阻断
+        continue-on-error: true
+        run: pnpm --filter @pmp/engine data:check:cn -- --snapshot
+
+      - name: 差分验证（本引擎 vs PolicyEngine 实时 API）
+        continue-on-error: true
+        run: pnpm --filter @pmp/engine data:verify
+
+      - name: 数据变了就跑一遍测试
+        run: pnpm test
+
+      - name: 有变更则开 PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/data-sync
+          title: '数据同步：税率与缴费基数'
+          commit-message: '数据同步：从 PolicyEngine 更新美加税率参数'
+          body: |
+            由 `.github/workflows/data-sync.yml` 自动生成。
+
+            **合并前请人工确认：**
+            - [ ] 美加的数值变化与官方公告一致（不要盲信上游——上游自己也会过期）
+            - [ ] 中国部分的过期城市已按人社局公告更新 `cities.ts`
+            - [ ] 差分验证的超差项都能解释（建模范围差异 vs 真的算错）
+          labels: data

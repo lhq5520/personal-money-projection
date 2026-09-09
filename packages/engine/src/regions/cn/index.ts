@@ -72,4 +72,5 @@ export const CN_REGION: RegionModule = {
   jurisdictions: CN_JURISDICTIONS,
   defaultJurisdiction: DEFAULT_CITY,
   computeYear,
+  provenanceFor: (jurisdiction) => getCity(jurisdiction).provenance,
 };
