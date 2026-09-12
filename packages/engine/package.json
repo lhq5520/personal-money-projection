@@ -14,8 +14,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "data:sync": "tsx scripts/sync.ts",
-    "data:check:cn": "tsx scripts/check-cn.ts",
-    "data:verify": "tsx scripts/verify.ts"
+    "data:verify": "tsx scripts/verify.ts",
+    "data:audit": "tsx scripts/audit.ts",
+    "data:check": "tsx scripts/check-sources.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.13",

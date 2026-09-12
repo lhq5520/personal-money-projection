@@ -19,3 +19,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @pmp/web build
+      # PR 上只警告不阻断：数据过期是维护节奏问题，不该挡住无关的代码改动。
+      # 真正的门禁在 data-sync.yml 的 audit job（每周跑，过期就开 issue）。
+      - name: 数据时效（仅警告）
+        run: pnpm --filter @pmp/engine data:audit -- --warn-only

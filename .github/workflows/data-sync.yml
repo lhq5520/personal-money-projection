@@ -1,8 +1,8 @@
-name: 税率数据同步
+name: 税率数据同步与时效审计
 
-# 每周一 06:00 UTC 跑一次。税率变更是年度事件，但美国 IRS 的通胀调整、
-# 加拿大的年中生效条款、中国 7 月的社保年度切换分散在全年，
-# 每周检查一次足以在变更后几天内发现，又不会把上游的公益 API 打爆。
+# 每周一 06:00 UTC。税率变更是年度事件，但触发点分散在全年：
+# 美国 IRS 的通胀调整（秋季）、加拿大年中生效的条款、中国 7 月的社保年度切换。
+# 每周检查一次足以在变更后几天内发现，又不会打扰上游的公益 API。
 on:
   schedule:
     - cron: '0 6 * * 1'
@@ -14,6 +14,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,19 +24,21 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: 同步美加参数
-        run: pnpm --filter @pmp/engine data:sync -- --write
+      # ---- 能自动的部分：拉上游 ----
+      - name: 同步美加可自动化的参数
+        run: pnpm --filter @pmp/engine data:sync -- --write --year $(date -u +%Y)
 
-      - name: 检查中国数据时效与官方页面变更
-        # 中国没有可自动同步的源，这一步只产出报告供人工处理，失败不阻断
+      # ---- 不能自动的部分：变更检测，仅作参考 ----
+      - name: 无上游数据源的变更检测
         continue-on-error: true
-        run: pnpm --filter @pmp/engine data:check:cn -- --snapshot
+        run: pnpm --filter @pmp/engine data:check -- --snapshot
 
+      # ---- 交叉验证：抓「算法用错了」而不只是「数字抄错了」----
       - name: 差分验证（本引擎 vs PolicyEngine 实时 API）
         continue-on-error: true
         run: pnpm --filter @pmp/engine data:verify
 
-      - name: 数据变了就跑一遍测试
+      - name: 同步后必须仍然全绿
         run: pnpm test
 
       - name: 有变更则开 PR
@@ -48,7 +51,57 @@ jobs:
             由 `.github/workflows/data-sync.yml` 自动生成。
 
             **合并前请人工确认：**
-            - [ ] 美加的数值变化与官方公告一致（不要盲信上游——上游自己也会过期）
-            - [ ] 中国部分的过期城市已按人社局公告更新 `cities.ts`
+            - [ ] 数值变化与官方公告一致（不要盲信上游——上游自己也会过期，
+                  且可能编码了它自己的实现技巧，参见俄亥俄的例子）
             - [ ] 差分验证的超差项都能解释（建模范围差异 vs 真的算错）
           labels: data
+
+  # ---- 时效审计：这才是「保证不会静默用旧数据」的门禁 ----
+  #
+  # 能同步的已经同步了；剩下的（中国全部、加拿大 CPP/EI 与省级、美国两个州）
+  # 没有任何可自动化的源。做不到「一直最新」，但做得到「过期一定被发现」。
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: 数据时效审计
+        id: audit
+        run: |
+          set -o pipefail
+          pnpm --filter @pmp/engine data:audit -- --in 45 2>&1 | tee audit.txt
+
+      - name: 过期则开 issue 盯人
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('audit.txt', 'utf8').replace(/\x1b\[[0-9;]*m/g, '');
+            const title = '数据已过期，需要人工核对';
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'data-stale',
+            });
+            const existing = open.find((i) => i.title === title);
+            const text = ['以下数据集已过适用期，这些项没有可自动同步的上游，需要人工核对：',
+                          '', '```', body.trim(), '```'].join('\n');
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing.number, body: text,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body: text, labels: ['data-stale'],
+              });
+            }

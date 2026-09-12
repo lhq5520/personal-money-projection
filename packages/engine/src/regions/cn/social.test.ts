@@ -10,6 +10,7 @@ import {
   housingFundBaseRange,
   socialBaseRange,
 } from './cities.js';
+import { CN_PROVINCES, getProvince } from './provinces.js';
 import type { CnSpecialDeductions } from '../../types.js';
 
 const shanghai = getCity('shanghai');
@@ -26,8 +27,10 @@ const shRate = CN_PENSION_RATE + CN_MEDICAL_RATE + shanghai.unemployment;
 describe('缴费基数按法规推导', () => {
   it('下限 = 社平 × 60%，上限 = 社平 × 300%', () => {
     const r = socialBaseRange(shanghai);
-    expect(r.min).toBe(Math.round(shanghai.avgWage * 0.6));
-    expect(r.max).toBe(Math.round(shanghai.avgWage * 3));
+    // 社平工资是省级统筹的驱动值，放在 provinces.ts
+    const avgWage = getProvince(shanghai.province).avgWage;
+    expect(r.min).toBe(Math.round(avgWage * 0.6));
+    expect(r.max).toBe(Math.round(avgWage * 3));
     // 300% / 60% 在未取整时恒为 5 倍；两端各自四舍五入后允许 1 元误差
     expect(Math.abs(r.max - r.min * 5)).toBeLessThanOrEqual(1);
   });
@@ -186,9 +189,33 @@ describe('专项附加扣除', () => {
   });
 });
 
-describe('城市覆盖', () => {
+describe('城市与省份覆盖', () => {
   it('包含 30 个以上城市，且 code 唯一', () => {
     expect(CN_CITIES.length).toBeGreaterThanOrEqual(30);
     expect(new Set(CN_CITIES.map((c) => c.code)).size).toBe(CN_CITIES.length);
+  });
+
+  it('每个城市都指向一个存在的省级统筹单位', () => {
+    const provinceCodes = new Set(CN_PROVINCES.map((p) => p.code));
+    for (const city of CN_CITIES) {
+      if (city.code === 'custom') continue;
+      expect(provinceCodes.has(city.province)).toBe(true);
+    }
+  });
+
+  it('同省各市共用同一套推导基数——这正是省级统筹的含义', () => {
+    // 南京、苏州、无锡同属江苏
+    const js = ['nanjing', 'suzhou', 'wuxi'].map((c) => derivedBase(getCity(c)));
+    expect(js[1]).toEqual(js[0]);
+    expect(js[2]).toEqual(js[0]);
+    // 但它们的租金扣除档位不同（南京是省会，苏州无锡不是）
+    expect(getCity('nanjing').rentTier).toBe('tier1');
+    expect(getCity('suzhou').rentTier).toBe('tier2');
+  });
+
+  it('省级数据一改，全省各市一起更新——维护量从 34 个数字降到 21 个', () => {
+    expect(CN_PROVINCES.length).toBeLessThan(CN_CITIES.length);
+    const verified = CN_PROVINCES.filter((p) => p.provenance.confidence === 'verified');
+    expect(verified.length).toBeGreaterThanOrEqual(20);
   });
 });

@@ -108,6 +108,43 @@ export const CA_PROVINCES = ['ab', 'bc', 'mb', 'nb', 'nl', 'ns', 'on', 'pe', 'qc
  * 自动解析政府网页在这里是不负责任的：一次静默的解析错误，
  * 会让用户拿着错误的数字做十年期的财务决策，而且没人会发现。
  */
+export interface WatchedPage {
+  key: string;
+  url: string;
+  label: string;
+}
+
+/**
+ * 加拿大的官方来源。
+ *
+ * CRA 只提供 HTML 页面，但相比中国各地人社局有两个优势：
+ * 单一稳定 URL、单一结构化表格。即便如此也**只做变更检测不做自动解析**——
+ * 抄错一个数字的代价，远高于每年人工看一次页面的成本。
+ * 解析的正确性由 ca.test.ts 里的恒等式把关（最大缴款 = (YMPE − 免征额) × 费率）。
+ */
+export const CA_SOURCES: WatchedPage[] = [
+  {
+    key: 'cpp',
+    url: 'https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/canada-pension-plan-cpp/cpp-contribution-rates-maximums-exemptions.html',
+    label: 'CRA · CPP 缴费率与限额',
+  },
+  {
+    key: 'ei',
+    url: 'https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/employment-insurance-ei/ei-premium-rates-maximums.html',
+    label: 'CRA · EI 保费率与最高可保收入',
+  },
+  {
+    key: 'brackets',
+    url: 'https://www.canada.ca/en/revenue-agency/services/tax/individuals/frequently-asked-questions-individuals/canadian-income-tax-rates-individuals-current-previous-years.html',
+    label: 'CRA · 联邦与各省所得税率',
+  },
+  {
+    key: 'indexation',
+    url: 'https://www.canada.ca/en/revenue-agency/services/tax/individuals/frequently-asked-questions-individuals/adjustment-personal-income-tax-benefit-amounts.html',
+    label: 'CRA · 个税与福利金额的通胀指数化调整',
+  },
+];
+
 export const CN_SOURCES: { city: string; url: string; label: string }[] = [
   { city: 'shanghai', url: 'https://rsj.sh.gov.cn/', label: '上海市人力资源和社会保障局' },
   { city: 'beijing', url: 'https://rsj.beijing.gov.cn/', label: '北京市人力资源和社会保障局' },

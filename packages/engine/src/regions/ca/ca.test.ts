@@ -2,12 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { CA_REGION } from './index.js';
 import { bracketTax } from '../../tax/brackets.js';
 import {
+  CA_PAYROLL_PROVENANCE,
+  CPP2_RATE,
   CPP_BASIC_EXEMPTION,
-  FEDERAL_BRACKETS,
+  CPP_RATE,
   EI_MAX_INSURABLE,
+  EI_RATE,
+  EI_RATE_QC,
   FEDERAL_BPA,
+  FEDERAL_BRACKETS,
+  QPP_RATE,
   QUEBEC_ABATEMENT,
   RRSP_DOLLAR_LIMIT,
+  RRSP_RATE_LIMIT,
   YAMPE,
   YMPE,
   computePayroll,
@@ -172,6 +179,52 @@ describe('RRSP', () => {
   it('缴款受供款额度约束', () => {
     const y = atSalary(300_000, 'ON', (i) => { i.ca.rrspRate = 0.5; });
     expect(y.planSelfAnnual).toBeCloseTo(RRSP_DOLLAR_LIMIT, 2);
+  });
+});
+
+describe('手工维护数据的自洽校验', () => {
+  /**
+   * CPP/EI 的限额没有任何可自动同步的源，只能人工从 CRA 页面抄。
+   * 抄错一位数不会有任何报错——除非有这些恒等式把关。
+   * 每年更新完 federal.ts 之后，这一组是第一道防线。
+   */
+  it('CPP 最大缴款 = (YMPE − 基本免征额) × 费率', () => {
+    const p = computePayroll(1_000_000, false);
+    expect(p.cpp).toBeCloseTo((YMPE - CPP_BASIC_EXEMPTION) * CPP_RATE, 2);
+  });
+
+  it('CPP2 最大缴款 = (YAMPE − YMPE) × 第二级费率', () => {
+    const p = computePayroll(1_000_000, false);
+    expect(p.cpp2).toBeCloseTo((YAMPE - YMPE) * CPP2_RATE, 2);
+  });
+
+  it('EI 最大保费 = 最高可保收入 × 费率', () => {
+    expect(computePayroll(1_000_000, false).ei).toBeCloseTo(EI_MAX_INSURABLE * EI_RATE, 2);
+  });
+
+  it('各限额之间的大小关系必须成立', () => {
+    expect(YAMPE).toBeGreaterThan(YMPE);
+    expect(YMPE).toBeGreaterThan(CPP_BASIC_EXEMPTION);
+    // 魁北克的 QPP 费率高于其余省份的 CPP，EI 费率则更低
+    expect(QPP_RATE).toBeGreaterThan(CPP_RATE);
+    expect(EI_RATE_QC).toBeLessThan(EI_RATE);
+  });
+
+  it('RRSP 绝对上限应与收入比例限额在合理量级上一致', () => {
+    // 绝对上限大致对应「18% × 某个高收入」，两者相差不该超过一个数量级
+    const impliedIncome = RRSP_DOLLAR_LIMIT / RRSP_RATE_LIMIT;
+    expect(impliedIncome).toBeGreaterThan(YMPE);
+    expect(impliedIncome).toBeLessThan(YMPE * 5);
+  });
+
+  it('联邦基本个人金额高于 CPP 基本免征额，且在合理区间内', () => {
+    expect(FEDERAL_BPA).toBeGreaterThan(CPP_BASIC_EXEMPTION);
+    expect(FEDERAL_BPA).toBeLessThan(30_000);
+  });
+
+  it('CPP/EI 数据带出处，过期会被 data:audit 发现', () => {
+    expect(CA_PAYROLL_PROVENANCE.effectiveTo).toMatch(/^\d{4}-12-31$/);
+    expect(CA_PAYROLL_PROVENANCE.sourceUrl).toContain('canada.ca');
   });
 });
 

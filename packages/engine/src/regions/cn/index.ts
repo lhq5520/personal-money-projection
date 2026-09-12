@@ -2,7 +2,7 @@
 
 import type { ProjectionInput, TaxComponent, YearIncome } from '../../types.js';
 import type { RegionModule } from '../types.js';
-import { CN_JURISDICTIONS, DEFAULT_CITY, getCity } from './cities.js';
+import { CN_JURISDICTIONS, DEFAULT_CITY, cityProvenance, getCity } from './cities.js';
 import { computeContributions, monthlySpecialDeduction } from './social.js';
 import { BASIC_DEDUCTION_ANNUAL, chooseBonusTaxStrategy } from './tax.js';
 
@@ -72,5 +72,5 @@ export const CN_REGION: RegionModule = {
   jurisdictions: CN_JURISDICTIONS,
   defaultJurisdiction: DEFAULT_CITY,
   computeYear,
-  provenanceFor: (jurisdiction) => getCity(jurisdiction).provenance,
+  provenanceFor: (jurisdiction) => cityProvenance(getCity(jurisdiction)),
 };

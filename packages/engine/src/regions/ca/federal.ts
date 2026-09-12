@@ -12,6 +12,8 @@
  */
 
 import type { TaxBracket } from '../../types.js';
+import type { Provenance } from '../../data/provenance.js';
+import { calendarYear } from '../../data/provenance.js';
 import { CA_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 
 export const CA_TAX_YEAR = CA_GENERATED.taxYear;
@@ -20,7 +22,25 @@ export const CA_DATA_SYNCED_AT = CA_GENERATED.syncedAt;
 /** 联邦税率表（同步自 PolicyEngine，按生效日期取当前税年的值） */
 export const FEDERAL_BRACKETS: readonly TaxBracket[] = restoreBrackets(CA_GENERATED.federalBrackets);
 
-/** 联邦基本个人金额。高收入者会逐步递减至 14,538，此处不建模该递减。 */
+/**
+ * CPP / EI / BPA 这批限额**每年都调**，且没有任何可自动同步的源：
+ * PolicyEngine 的加拿大包里根本没有 CPP/EI 参数，CRA 只有 HTML 页面。
+ *
+ * 所以它们带独立的出处元数据，由 `pnpm data:audit` 在适用期结束后让 CI 变红——
+ * 抓不到新值是一回事，静默地continue用旧值是另一回事。
+ */
+export const CA_PAYROLL_TAX_YEAR = 2025;
+
+export const CA_PAYROLL_PROVENANCE: Provenance = {
+  ...calendarYear(CA_PAYROLL_TAX_YEAR),
+  sourceUrl:
+    'https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/payroll/payroll-deductions-contributions/canada-pension-plan-cpp/cpp-contribution-rates-maximums-exemptions.html',
+  verifiedAt: '2026-09-12',
+  confidence: 'verified',
+  note: 'CPP/EI 各项限额与联邦基本个人金额为手工维护：上游 PolicyEngine 无 CPP/EI 参数，CRA 仅提供 HTML 页面',
+};
+
+/** 联邦基本个人金额（最高档）。高收入者逐步递减至 14,538，此处不建模该递减。 */
 export const FEDERAL_BPA = 16_129;
 
 /* ------------------------------------------------------------ CPP / QPP */

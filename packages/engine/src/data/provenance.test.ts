@@ -50,15 +50,26 @@ describe('引擎的数据时效警告', () => {
   });
 
   it('未核对的城市明确标记为待核对，不静默使用估算值', () => {
-    const r = projectTimeline(withCity('hangzhou'), 7.2, at('2026-09-09'));
+    // 南昌所属的江西省截至核对日尚未公布 2026 年度基数，是唯一仍为估算的省份
+    const r = projectTimeline(withCity('nanchang'), 7.2, at('2026-09-12'));
     expect(r.warnings.some((w) => w.code === 'data-unverified')).toBe(true);
     // 数据停留在 2024 社保年度，同时也已过期
     expect(r.warnings.some((w) => w.code === 'data-expired')).toBe(true);
   });
 
+  it('已核对的省份下属各市都不报警——省级统筹，一处更新全省受益', () => {
+    for (const city of ['hangzhou', 'nanjing', 'suzhou', 'chengdu', 'wuhan', 'qingdao']) {
+      const r = projectTimeline(withCity(city), 7.2, at('2026-09-12'));
+      const stale = r.warnings.filter(
+        (w) => w.code === 'data-expired' || w.code === 'data-unverified',
+      );
+      expect(stale, `${city} 不应有数据时效警告`).toEqual([]);
+    }
+  });
+
   it('引擎是纯函数：同样的输入 + 同样的时点，警告完全一致', () => {
-    const a = projectTimeline(withCity('hangzhou'), 7.2, at('2026-09-09'));
-    const b = projectTimeline(withCity('hangzhou'), 7.2, at('2026-09-09'));
+    const a = projectTimeline(withCity('nanchang'), 7.2, at('2026-09-12'));
+    const b = projectTimeline(withCity('nanchang'), 7.2, at('2026-09-12'));
     expect(a.warnings).toEqual(b.warnings);
   });
 

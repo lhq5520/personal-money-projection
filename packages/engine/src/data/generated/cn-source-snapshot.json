@@ -1,34 +1,34 @@
 {
   "shanghai": {
-    "hash": "2445ee27e870437a",
-    "checkedAt": "2026-09-09"
+    "hash": "2f829ed1e24860ba",
+    "checkedAt": "2026-09-12"
   },
   "beijing": {
-    "hash": "55776695a24ba939",
-    "checkedAt": "2026-09-09"
+    "hash": "0b1e576574431e4e",
+    "checkedAt": "2026-09-12"
   },
   "shenzhen": {
     "hash": "",
     "checkedAt": "2026-09-09"
   },
   "guangzhou": {
-    "hash": "922200af30708c84",
-    "checkedAt": "2026-09-09"
+    "hash": "80ce61534acef593",
+    "checkedAt": "2026-09-12"
   },
   "hangzhou": {
     "hash": "",
     "checkedAt": "2026-09-09"
   },
   "nanjing": {
-    "hash": "9ab44eb6ac2bceb7",
-    "checkedAt": "2026-09-09"
+    "hash": "d0e41e6363848cb2",
+    "checkedAt": "2026-09-12"
   },
   "chengdu": {
     "hash": "",
     "checkedAt": "2026-09-09"
   },
   "wuhan": {
-    "hash": "2ffc175f64d4f71f",
-    "checkedAt": "2026-09-09"
+    "hash": "0024014c0efe7f1e",
+    "checkedAt": "2026-09-12"
   }
 }
