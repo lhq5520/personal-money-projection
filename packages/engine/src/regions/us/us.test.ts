@@ -10,7 +10,7 @@ import {
   computeFica,
 } from './federal.js';
 import { bracketTax } from '../../tax/brackets.js';
-import { getState } from './states.js';
+import { MANUAL_STATE_TAX_YEAR, getState, stateDataTaxYear } from './states.js';
 import { defaultInput } from '../../defaults.js';
 import type { ProjectionInput } from '../../types.js';
 
@@ -96,18 +96,30 @@ describe('联邦所得税（黄金用例）', () => {
     }
   });
 
-  it('加州州税按其九档表逐档累进', () => {
+  it('加州州税按其分档表逐档累进', () => {
     const y = atSalary(100_000);
     const state = y.taxBreakdown.find((t) => t.code === 'regional')!.amount;
-    // 应税 = 100,000 − 5,540 = 94,460
-    const expected =
-      10_756 * 0.01 +
-      (25_499 - 10_756) * 0.02 +
-      (40_245 - 25_499) * 0.04 +
-      (55_866 - 40_245) * 0.06 +
-      (70_606 - 55_866) * 0.08 +
-      (94_460 - 70_606) * 0.093;
-    expect(state).toBeCloseTo(expected, 2);
+    const ca = getState('CA');
+    // 阈值取自同步数据：加州每年按 CPI 调整分档，写死会在数据更新后误报
+    const taxable = 100_000 - ca.standardDeduction.single;
+    expect(state).toBeCloseTo(bracketTax(ca.brackets!.single, taxable), 2);
+  });
+
+  it('加州分档已同步到当前税年，不再是手工的旧值', () => {
+    const ca = getState('CA');
+    expect(stateDataTaxYear('CA')).toBe(US_TAX_YEAR);
+    // 最低档上界会随 CPI 逐年上移；2024 年的 10,756 不应再出现
+    expect(ca.brackets!.single[0]!.upTo).toBeGreaterThan(10_756);
+    expect(ca.brackets!.single.map((b) => b.rate)).toEqual([
+      0.01, 0.02, 0.04, 0.06, 0.08, 0.093, 0.103, 0.113, 0.123,
+    ]);
+  });
+
+  it('俄亥俄刻意不同步——上游把「税收悬崖」编码成了隐含平均税率，直接采信会对低收入者多征税', () => {
+    expect(stateDataTaxYear('OH')).toBe(MANUAL_STATE_TAX_YEAR);
+    const oh = getState('OH');
+    // 俄亥俄法定 26,050 美元以下为 0%，本地手工值保留了这个 0 档
+    expect(oh.brackets!.single[0]!.rate).toBe(0);
   });
 
   it('无州所得税的州只剩联邦税', () => {

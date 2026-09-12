@@ -20,7 +20,7 @@ import {
   childTaxCredit,
   computeFica,
 } from './federal.js';
-import { DEFAULT_STATE, STATE_DATA_TAX_YEAR, US_STATES, getState } from './states.js';
+import { DEFAULT_STATE, US_STATES, getState, stateDataTaxYear } from './states.js';
 
 /** 州级税率表只区分「单身档」与「已婚合并档」 */
 const stateBand = (status: UsFilingStatus): 'single' | 'married' =>
@@ -134,19 +134,25 @@ export const US_REGION: RegionModule = {
   computeYear,
   provenanceFor: (jurisdiction): Provenance => {
     const state = getState(jurisdiction);
-    // 联邦分档由 data:sync 同步到当前税年；州级分档目前仍是手工维护的 2025 值。
-    // 取两者中更旧的年份作为该辖区的整体口径——一个组件过期，结论就不能算新鲜。
-    const stateYear = STATE_DATA_TAX_YEAR;
-    const effectiveYear = Math.min(US_TAX_YEAR, state.brackets ? stateYear : US_TAX_YEAR);
+    const syncKey = state.code === 'NYC' ? 'NY' : state.code;
+    // 无州所得税的州没有会过期的州级数据，口径就是联邦的年份
+    const stateYear = state.brackets ? stateDataTaxYear(syncKey) : US_TAX_YEAR;
+    // 一个组件过期，整体结论就不能算新鲜，所以取两者中更旧的年份
+    const effectiveYear = Math.min(US_TAX_YEAR, stateYear);
+    const synced = stateYear === US_TAX_YEAR;
     return {
       ...calendarYear(effectiveYear),
       sourceUrl: 'https://github.com/PolicyEngine/policyengine-us',
       verifiedAt: US_DATA_SYNCED_AT,
+      // 「数据旧」和「建模不全」是两个维度，不要混为一谈：
+      // 适用期（effectiveTo）表达前者，confidence 表达后者。
+      // 加州的分档已同步到当前税年，但我们没建模它的个人免税额抵免，仍算 estimated。
       confidence: state.approximate ? 'estimated' : 'derived',
-      note:
-        state.brackets && stateYear < US_TAX_YEAR
-          ? `联邦分档已同步至 ${US_TAX_YEAR} 税年，州级分档仍为 ${stateYear} 税年的手工值`
-          : undefined,
+      note: synced
+        ? state.approximate
+          ? '分档已同步至当前税年；该州的抵免与豁免规则更复杂，模型只覆盖分档与标准扣除'
+          : undefined
+        : `联邦分档已同步至 ${US_TAX_YEAR} 税年，该州分档仍为 ${stateYear} 税年的手工值`,
     };
   },
 };

@@ -17,9 +17,9 @@
  */
 
 export const POLICYENGINE_US_RAW =
-  'https://raw.githubusercontent.com/PolicyEngine/policyengine-us/master/policyengine_us/parameters';
+  'https://raw.githubusercontent.com/PolicyEngine/policyengine-us/main/policyengine_us/parameters';
 export const POLICYENGINE_CA_RAW =
-  'https://raw.githubusercontent.com/PolicyEngine/policyengine-canada/master/policyengine_canada/parameters';
+  'https://raw.githubusercontent.com/PolicyEngine/policyengine-canada/main/policyengine_canada/parameters';
 
 export const POLICYENGINE_API = 'https://api.policyengine.org';
 
@@ -37,6 +37,61 @@ export const US_FILING_STATUS_MAP = {
   SEPARATE: 'married-separate',
   HEAD_OF_HOUSEHOLD: 'head-of-household',
 } as const;
+
+/**
+ * 美国各州税率表的取数路径。
+ *
+ * 各州的 YAML 布局确实不统一，但归纳下来只有两种模式，覆盖本项目建模的 20/21 个州：
+ *   - schedule：按申报身份分文件的分档表，`rates/{status}.yaml` 或 `main/{status}.yaml`
+ *   - flat：单一税率，`rate.yaml` / `rates.yaml` / `agi_rate.yaml`
+ *
+ * 麻州（MA）不在其中——它按 A/B/C 类收入分别计税，结构特殊，保持手工维护。
+ * 无州所得税的州自然也不需要。
+ */
+export type StateRateKind =
+  /** 按申报身份分文件的分档表：`{dir}/{single|joint}.yaml` */
+  | 'schedule'
+  /** 所有申报身份共用一份分档表：`{dir}.yaml` 内含 brackets */
+  | 'shared-schedule'
+  /** 单一税率：`{dir}.yaml` 整份就是一个日期键值表 */
+  | 'flat';
+
+export const US_STATE_RATE_SOURCES: Record<string, { kind: StateRateKind; dir: string }> = {
+  CA: { kind: 'schedule', dir: 'rates' },
+  MN: { kind: 'schedule', dir: 'rates' },
+  MD: { kind: 'schedule', dir: 'rates' },
+  OR: { kind: 'schedule', dir: 'rates' },
+  NY: { kind: 'schedule', dir: 'main' },
+  NJ: { kind: 'schedule', dir: 'main' },
+  AZ: { kind: 'schedule', dir: 'main' },
+  GA: { kind: 'schedule', dir: 'main' },
+  ID: { kind: 'schedule', dir: 'main' },
+  VA: { kind: 'shared-schedule', dir: 'rates' },
+  MS: { kind: 'shared-schedule', dir: 'rate' },
+  CO: { kind: 'flat', dir: 'rate' },
+  IL: { kind: 'flat', dir: 'rate' },
+  MI: { kind: 'flat', dir: 'rate' },
+  NC: { kind: 'flat', dir: 'rate' },
+  PA: { kind: 'flat', dir: 'rate' },
+  UT: { kind: 'flat', dir: 'rate' },
+  KY: { kind: 'flat', dir: 'rate' },
+  IN: { kind: 'flat', dir: 'agi_rate' },
+  // 俄亥俄（OH）**刻意不同步**。
+  //
+  // 上游把第一档税率编码成 0.0127448，但那不是真实税率——注释里写明了它是
+  // 为了模拟「跨过第二档门槛时加收一笔固定额」而反推的隐含平均税率。
+  // 当成普通边际税率从 0 起征的话，年收入 2 万的俄亥俄人会被算出 254 美元税，
+  // 而俄亥俄法律规定 26,050 美元以下为 0。
+  //
+  // 教训：盲目同步会把别人模型的内部编码技巧当成事实抄进来。
+  // 俄亥俄保持手工维护，靠 data:verify 的差分验证兜底。
+};
+
+/** 州级文件里的申报身份名 → 本项目州级税表的两档（单身档 / 已婚合并档） */
+export const US_STATE_BAND_FILE = { single: 'single', married: 'joint' } as const;
+
+export const usStatePath = (state: string, file: string): string =>
+  `gov/states/${state.toLowerCase()}/tax/income/${file}`;
 
 /** 加拿大：联邦与各省的税率表路径 */
 export const CA_FEDERAL_SCHEDULE = 'gov/cra/tax/income/income_tax_schedule.yaml';

@@ -49,7 +49,13 @@ export {
   childTaxCredit,
   computeFica,
 } from './regions/us/federal.js';
-export { US_STATES, DEFAULT_STATE, STATE_DATA_TAX_YEAR, getState } from './regions/us/states.js';
+export {
+  US_STATES,
+  DEFAULT_STATE,
+  MANUAL_STATE_TAX_YEAR,
+  getState,
+  stateDataTaxYear,
+} from './regions/us/states.js';
 export type { StateTax } from './regions/us/states.js';
 
 // ---- 加拿大 ----

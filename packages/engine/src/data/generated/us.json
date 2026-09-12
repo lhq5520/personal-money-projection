@@ -1,6 +1,6 @@
 {
   "taxYear": 2026,
-  "syncedAt": "2026-09-09",
+  "syncedAt": "2026-09-12",
   "source": "PolicyEngine/policyengine-us",
   "brackets": {
     "single": [
@@ -130,5 +130,725 @@
     "married-separate": 16100,
     "head-of-household": 24150
   },
-  "socialSecurityWageBase": 184500
+  "socialSecurityWageBase": 184500,
+  "states": {
+    "CA": {
+      "single": [
+        {
+          "upTo": 11079,
+          "rate": 0.01
+        },
+        {
+          "upTo": 26264,
+          "rate": 0.02
+        },
+        {
+          "upTo": 41452,
+          "rate": 0.04
+        },
+        {
+          "upTo": 57542,
+          "rate": 0.06
+        },
+        {
+          "upTo": 72724,
+          "rate": 0.08
+        },
+        {
+          "upTo": 371479,
+          "rate": 0.093
+        },
+        {
+          "upTo": 445771,
+          "rate": 0.103
+        },
+        {
+          "upTo": 742953,
+          "rate": 0.113
+        },
+        {
+          "upTo": null,
+          "rate": 0.123
+        }
+      ],
+      "married": [
+        {
+          "upTo": 22158,
+          "rate": 0.01
+        },
+        {
+          "upTo": 52528,
+          "rate": 0.02
+        },
+        {
+          "upTo": 82904,
+          "rate": 0.04
+        },
+        {
+          "upTo": 115084,
+          "rate": 0.06
+        },
+        {
+          "upTo": 145448,
+          "rate": 0.08
+        },
+        {
+          "upTo": 742958,
+          "rate": 0.093
+        },
+        {
+          "upTo": 891542,
+          "rate": 0.103
+        },
+        {
+          "upTo": 1485906,
+          "rate": 0.113
+        },
+        {
+          "upTo": null,
+          "rate": 0.123
+        }
+      ]
+    },
+    "MN": {
+      "single": [
+        {
+          "upTo": 32570,
+          "rate": 0.0535
+        },
+        {
+          "upTo": 106990,
+          "rate": 0.068
+        },
+        {
+          "upTo": 198630,
+          "rate": 0.0785
+        },
+        {
+          "upTo": null,
+          "rate": 0.0985
+        }
+      ],
+      "married": [
+        {
+          "upTo": 47620,
+          "rate": 0.0535
+        },
+        {
+          "upTo": 189180,
+          "rate": 0.068
+        },
+        {
+          "upTo": 330410,
+          "rate": 0.0785
+        },
+        {
+          "upTo": null,
+          "rate": 0.0985
+        }
+      ]
+    },
+    "MD": {
+      "single": [
+        {
+          "upTo": 1000,
+          "rate": 0.02
+        },
+        {
+          "upTo": 2000,
+          "rate": 0.03
+        },
+        {
+          "upTo": 3000,
+          "rate": 0.04
+        },
+        {
+          "upTo": 100000,
+          "rate": 0.0475
+        },
+        {
+          "upTo": 125000,
+          "rate": 0.05
+        },
+        {
+          "upTo": 150000,
+          "rate": 0.0525
+        },
+        {
+          "upTo": 250000,
+          "rate": 0.055
+        },
+        {
+          "upTo": 500000,
+          "rate": 0.0575
+        },
+        {
+          "upTo": 1000000,
+          "rate": 0.0625
+        },
+        {
+          "upTo": null,
+          "rate": 0.065
+        }
+      ],
+      "married": [
+        {
+          "upTo": 1000,
+          "rate": 0.02
+        },
+        {
+          "upTo": 2000,
+          "rate": 0.03
+        },
+        {
+          "upTo": 3000,
+          "rate": 0.04
+        },
+        {
+          "upTo": 150000,
+          "rate": 0.0475
+        },
+        {
+          "upTo": 175000,
+          "rate": 0.05
+        },
+        {
+          "upTo": 225000,
+          "rate": 0.0525
+        },
+        {
+          "upTo": 300000,
+          "rate": 0.055
+        },
+        {
+          "upTo": 600000,
+          "rate": 0.0575
+        },
+        {
+          "upTo": 1200000,
+          "rate": 0.0625
+        },
+        {
+          "upTo": null,
+          "rate": 0.065
+        }
+      ]
+    },
+    "OR": {
+      "single": [
+        {
+          "upTo": 4400,
+          "rate": 0.0475
+        },
+        {
+          "upTo": 11100,
+          "rate": 0.0675
+        },
+        {
+          "upTo": 125000,
+          "rate": 0.0875
+        },
+        {
+          "upTo": null,
+          "rate": 0.099
+        }
+      ],
+      "married": [
+        {
+          "upTo": 8800,
+          "rate": 0.0475
+        },
+        {
+          "upTo": 22200,
+          "rate": 0.0675
+        },
+        {
+          "upTo": 250000,
+          "rate": 0.0875
+        },
+        {
+          "upTo": null,
+          "rate": 0.099
+        }
+      ]
+    },
+    "NY": {
+      "single": [
+        {
+          "upTo": 8500,
+          "rate": 0.039
+        },
+        {
+          "upTo": 11700,
+          "rate": 0.044
+        },
+        {
+          "upTo": 13900,
+          "rate": 0.0515
+        },
+        {
+          "upTo": 80650,
+          "rate": 0.054
+        },
+        {
+          "upTo": 215400,
+          "rate": 0.059
+        },
+        {
+          "upTo": 1077550,
+          "rate": 0.0685
+        },
+        {
+          "upTo": 5000000,
+          "rate": 0.0965
+        },
+        {
+          "upTo": 25000000,
+          "rate": 0.103
+        },
+        {
+          "upTo": 25000000,
+          "rate": 0.109
+        },
+        {
+          "upTo": null,
+          "rate": 0.109
+        }
+      ],
+      "married": [
+        {
+          "upTo": 17150,
+          "rate": 0.039
+        },
+        {
+          "upTo": 23600,
+          "rate": 0.044
+        },
+        {
+          "upTo": 27900,
+          "rate": 0.0515
+        },
+        {
+          "upTo": 161550,
+          "rate": 0.054
+        },
+        {
+          "upTo": 323200,
+          "rate": 0.059
+        },
+        {
+          "upTo": 2155350,
+          "rate": 0.0685
+        },
+        {
+          "upTo": 5000000,
+          "rate": 0.0965
+        },
+        {
+          "upTo": 25000000,
+          "rate": 0.103
+        },
+        {
+          "upTo": 25000000,
+          "rate": 0.109
+        },
+        {
+          "upTo": null,
+          "rate": 0.109
+        }
+      ]
+    },
+    "NJ": {
+      "single": [
+        {
+          "upTo": 20000,
+          "rate": 0.014
+        },
+        {
+          "upTo": 35000,
+          "rate": 0.0175
+        },
+        {
+          "upTo": 40000,
+          "rate": 0.035
+        },
+        {
+          "upTo": 75000,
+          "rate": 0.05525
+        },
+        {
+          "upTo": 500000,
+          "rate": 0.0637
+        },
+        {
+          "upTo": 1000000,
+          "rate": 0.0897
+        },
+        {
+          "upTo": null,
+          "rate": 0.1075
+        }
+      ],
+      "married": [
+        {
+          "upTo": 20000,
+          "rate": 0.014
+        },
+        {
+          "upTo": 50000,
+          "rate": 0.0175
+        },
+        {
+          "upTo": 70000,
+          "rate": 0.0245
+        },
+        {
+          "upTo": 80000,
+          "rate": 0.035
+        },
+        {
+          "upTo": 150000,
+          "rate": 0.05525
+        },
+        {
+          "upTo": 500000,
+          "rate": 0.0637
+        },
+        {
+          "upTo": 1000000,
+          "rate": 0.0897
+        },
+        {
+          "upTo": null,
+          "rate": 0.1075
+        }
+      ]
+    },
+    "AZ": {
+      "single": [
+        {
+          "upTo": 28653,
+          "rate": 0.025
+        },
+        {
+          "upTo": 55615,
+          "rate": 0.025
+        },
+        {
+          "upTo": 166843,
+          "rate": 0.025
+        },
+        {
+          "upTo": null,
+          "rate": 0.025
+        }
+      ],
+      "married": [
+        {
+          "upTo": 57305,
+          "rate": 0.025
+        },
+        {
+          "upTo": 111229,
+          "rate": 0.025
+        },
+        {
+          "upTo": 333684,
+          "rate": 0.025
+        },
+        {
+          "upTo": null,
+          "rate": 0.025
+        }
+      ]
+    },
+    "GA": {
+      "single": [
+        {
+          "upTo": 750,
+          "rate": 0.01
+        },
+        {
+          "upTo": 2250,
+          "rate": 0.02
+        },
+        {
+          "upTo": 3750,
+          "rate": 0.03
+        },
+        {
+          "upTo": 5250,
+          "rate": 0.04
+        },
+        {
+          "upTo": 7000,
+          "rate": 0.05
+        },
+        {
+          "upTo": null,
+          "rate": 0.0575
+        }
+      ],
+      "married": [
+        {
+          "upTo": 1000,
+          "rate": 0.01
+        },
+        {
+          "upTo": 3000,
+          "rate": 0.02
+        },
+        {
+          "upTo": 5000,
+          "rate": 0.03
+        },
+        {
+          "upTo": 7000,
+          "rate": 0.04
+        },
+        {
+          "upTo": 10000,
+          "rate": 0.05
+        },
+        {
+          "upTo": null,
+          "rate": 0.0575
+        }
+      ]
+    },
+    "ID": {
+      "single": [
+        {
+          "upTo": 4811,
+          "rate": 0
+        },
+        {
+          "upTo": 4987,
+          "rate": 0.053
+        },
+        {
+          "upTo": 7939,
+          "rate": 0.045
+        },
+        {
+          "upTo": 8311,
+          "rate": 0.065
+        },
+        {
+          "upTo": null,
+          "rate": 0.06
+        }
+      ],
+      "married": [
+        {
+          "upTo": 9622,
+          "rate": 0
+        },
+        {
+          "upTo": 9974,
+          "rate": 0.053
+        },
+        {
+          "upTo": 15878,
+          "rate": 0.045
+        },
+        {
+          "upTo": 16622,
+          "rate": 0.065
+        },
+        {
+          "upTo": null,
+          "rate": 0.06
+        }
+      ]
+    },
+    "VA": {
+      "single": [
+        {
+          "upTo": 3000,
+          "rate": 0.02
+        },
+        {
+          "upTo": 5000,
+          "rate": 0.03
+        },
+        {
+          "upTo": 17000,
+          "rate": 0.05
+        },
+        {
+          "upTo": null,
+          "rate": 0.0575
+        }
+      ],
+      "married": [
+        {
+          "upTo": 3000,
+          "rate": 0.02
+        },
+        {
+          "upTo": 5000,
+          "rate": 0.03
+        },
+        {
+          "upTo": 17000,
+          "rate": 0.05
+        },
+        {
+          "upTo": null,
+          "rate": 0.0575
+        }
+      ]
+    },
+    "MS": {
+      "single": [
+        {
+          "upTo": 10000,
+          "rate": 0
+        },
+        {
+          "upTo": 10000,
+          "rate": 0.04
+        },
+        {
+          "upTo": 10000,
+          "rate": 0.05
+        },
+        {
+          "upTo": null,
+          "rate": 0.05
+        }
+      ],
+      "married": [
+        {
+          "upTo": 10000,
+          "rate": 0
+        },
+        {
+          "upTo": 10000,
+          "rate": 0.04
+        },
+        {
+          "upTo": 10000,
+          "rate": 0.05
+        },
+        {
+          "upTo": null,
+          "rate": 0.05
+        }
+      ]
+    },
+    "CO": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.044
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.044
+        }
+      ]
+    },
+    "IL": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.0495
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.0495
+        }
+      ]
+    },
+    "MI": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.0425
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.0425
+        }
+      ]
+    },
+    "NC": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.0399
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.0399
+        }
+      ]
+    },
+    "PA": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.0307
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.0307
+        }
+      ]
+    },
+    "UT": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.0445
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.0445
+        }
+      ]
+    },
+    "KY": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.035
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.035
+        }
+      ]
+    },
+    "IN": {
+      "single": [
+        {
+          "upTo": null,
+          "rate": 0.0295
+        }
+      ],
+      "married": [
+        {
+          "upTo": null,
+          "rate": 0.0295
+        }
+      ]
+    }
+  }
 }

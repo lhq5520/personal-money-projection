@@ -21,6 +21,8 @@ interface GeneratedUs {
   brackets: Record<string, GeneratedBracket[]>;
   standardDeduction: Record<string, number>;
   socialSecurityWageBase: number;
+  /** 州级分档。未能同步或刻意排除的州不会出现在这里，由 states.ts 回落到手工值 */
+  states?: Record<string, { single: GeneratedBracket[]; married: GeneratedBracket[] }>;
 }
 
 interface GeneratedCa {

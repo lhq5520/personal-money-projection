@@ -21,6 +21,9 @@ import {
   POLICYENGINE_US_RAW,
   US_FILING_STATUS_MAP,
   US_PARAMS,
+  US_STATE_BAND_FILE,
+  US_STATE_RATE_SOURCES,
+  usStatePath,
 } from './sources.js';
 import {
   bold,
@@ -54,6 +57,8 @@ interface UsData {
   brackets: Record<string, Bracket[]>;
   standardDeduction: Record<string, number>;
   socialSecurityWageBase: number;
+  /** 州级分档：{ CA: { single: [...], married: [...] } }。未能同步的州不出现在这里 */
+  states: Record<string, { single: Bracket[]; married: Bracket[] }>;
 }
 
 interface CaData {
@@ -109,6 +114,10 @@ async function syncUs(): Promise<UsData> {
 
   const socialSecurityWageBase = valueForYear(datedValues(capRaw), TAX_YEAR) ?? 0;
 
+  const { states, ok, failed } = await syncUsStates();
+  console.log(`  ${green('✓')} 州级分档已同步 ${ok.length} 个州：${ok.join(' ')}`);
+  if (failed.length) console.log(`  ${yellow('?')} 未能同步：${failed.join(' ')}`);
+
   return {
     taxYear: TAX_YEAR,
     syncedAt: new Date().toISOString().slice(0, 10),
@@ -116,7 +125,56 @@ async function syncUs(): Promise<UsData> {
     brackets,
     standardDeduction,
     socialSecurityWageBase,
+    states,
   };
+}
+
+/** 同步各州分档表。失败的州静默跳过并计数，由调用方汇总报告。 */
+async function syncUsStates(): Promise<{
+  states: UsData['states'];
+  ok: string[];
+  failed: string[];
+}> {
+  const states: UsData['states'] = {};
+  const ok: string[] = [];
+  const failed: string[] = [];
+
+  for (const [code, src] of Object.entries(US_STATE_RATE_SOURCES)) {
+    try {
+      if (src.kind === 'flat') {
+        // 单一税率：整份文件就是一个日期键值表
+        const doc = await fetchYaml(`${POLICYENGINE_US_RAW}/${usStatePath(code, `${src.dir}.yaml`)}`);
+        const rate = valueForYear(datedValues(doc), TAX_YEAR);
+        if (rate === undefined) throw new Error('该税年无取值');
+        const rows = [{ upTo: INF, rate }];
+        states[code] = { single: rows, married: rows };
+      } else if (src.kind === 'shared-schedule') {
+        // 所有申报身份共用一份分档表
+        const rows = parseCaSchedule(
+          await fetchYaml(`${POLICYENGINE_US_RAW}/${usStatePath(code, `${src.dir}.yaml`)}`),
+        );
+        if (rows.length === 0) throw new Error('分档表为空');
+        states[code] = { single: rows, married: rows };
+      } else {
+        const single = parseCaSchedule(
+          await fetchYaml(
+            `${POLICYENGINE_US_RAW}/${usStatePath(code, `${src.dir}/${US_STATE_BAND_FILE.single}.yaml`)}`,
+          ),
+        );
+        const married = parseCaSchedule(
+          await fetchYaml(
+            `${POLICYENGINE_US_RAW}/${usStatePath(code, `${src.dir}/${US_STATE_BAND_FILE.married}.yaml`)}`,
+          ),
+        );
+        if (single.length === 0 || married.length === 0) throw new Error('分档表为空');
+        states[code] = { single, married };
+      }
+      ok.push(code);
+    } catch (e) {
+      failed.push(`${code}(${String(e).slice(0, 40)})`);
+    }
+  }
+  return { states, ok, failed };
 }
 
 /* ---------------------------------------------------------------- 加拿大 */
@@ -135,7 +193,10 @@ function upstreamStaleness(node: unknown): number | undefined {
   return latest ? Number(latest.slice(0, 4)) : undefined;
 }
 
-/** PolicyEngine 加拿大的税率表：[{ threshold: { values }, rate: { values } }, ...] */
+/**
+ * PolicyEngine 的分档表通用结构：[{ threshold: { values }, rate: { values } }, ...]
+ * 加拿大的省级表和美国的州级表用的是同一种形状，所以共用这个解析器。
+ */
 function parseCaSchedule(node: unknown): Bracket[] {
   const list = (node as { brackets?: unknown[] })?.brackets ?? [];
   const rows: { threshold: number; rate: number }[] = [];

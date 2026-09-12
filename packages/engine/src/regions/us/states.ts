@@ -14,6 +14,7 @@
 
 import type { TaxBracket } from '../../types.js';
 import type { LocalizedName } from '../types.js';
+import { US_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 
 export interface StateTax {
   code: string;
@@ -325,17 +326,35 @@ export const US_STATES: readonly StateTax[] = [
   },
 ];
 
+/** 未能同步、仍为手工维护的州所对应的税年 */
+export const MANUAL_STATE_TAX_YEAR = 2025;
+
 /**
- * 州级分档数据所属的税年。
+ * 取某个州当前实际生效的分档表。
  *
- * 联邦分档由 data:sync 自动同步，州级则是手工维护——51 个州的上游 YAML 结构各异，
- * 逐个解析不现实。改用 `pnpm data:verify` 对 PolicyEngine 实时 API 做差分验证，
- * 州级数据漂移会在那里显现为超出容差的差异。
+ * 优先用 `data:sync` 同步下来的值——州级分档每年随通胀调整，手写的必然会过期。
+ * 上游没有、或刻意排除的州（如俄亥俄，见 scripts/sources.ts 的说明）回落到本文件的手工值。
  */
-export const STATE_DATA_TAX_YEAR = 2025;
+function bracketsFor(
+  code: string,
+  fallback: { single: readonly TaxBracket[]; married: readonly TaxBracket[] } | null,
+): { single: readonly TaxBracket[]; married: readonly TaxBracket[] } | null {
+  const synced = US_GENERATED.states?.[code];
+  if (!synced) return fallback;
+  return { single: restoreBrackets(synced.single), married: restoreBrackets(synced.married) };
+}
+
+/** 该州的分档是同步来的还是手工维护的，决定它的数据时效口径 */
+export function stateDataTaxYear(code: string): number {
+  return US_GENERATED.states?.[code] ? US_GENERATED.taxYear : MANUAL_STATE_TAX_YEAR;
+}
 
 export const DEFAULT_STATE = 'CA';
 
 export function getState(code: string): StateTax {
-  return US_STATES.find((s) => s.code === code) ?? US_STATES.find((s) => s.code === DEFAULT_STATE)!;
+  const base = US_STATES.find((s) => s.code === code) ?? US_STATES.find((s) => s.code === DEFAULT_STATE)!;
+  // 纽约市共用纽约州的分档，另加市税
+  const syncKey = base.code === 'NYC' ? 'NY' : base.code;
+  const brackets = bracketsFor(syncKey, base.brackets);
+  return brackets === base.brackets ? base : { ...base, brackets };
 }
