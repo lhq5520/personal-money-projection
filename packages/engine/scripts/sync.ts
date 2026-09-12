@@ -66,6 +66,7 @@ interface CaData {
   syncedAt: string;
   source: string;
   federalBrackets: Bracket[];
+  federalStaleFields: string[];
   provincialBrackets: Record<string, Bracket[]>;
 }
 
@@ -113,6 +114,17 @@ async function syncUs(): Promise<UsData> {
   }
 
   const socialSecurityWageBase = valueForYear(datedValues(capRaw), TAX_YEAR) ?? 0;
+
+  // 逐档检查联邦阈值有没有落后于目标税年——加拿大就栽在这上面
+  for (let i = 1; i <= 6; i++) {
+    const node = (thresholds[String(i)] as Record<string, unknown>)?.SINGLE;
+    const latest = latestEffectiveDate(datedValues(node));
+    if (latest && Number(latest.slice(0, 4)) < TAX_YEAR) {
+      console.log(
+        `  ${red('!')} 联邦第 ${i} 档阈值最后更新于 ${latest.slice(0, 4)} 年，落后于 ${TAX_YEAR} 税年`,
+      );
+    }
+  }
 
   const { states, ok, failed } = await syncUsStates();
   console.log(`  ${green('✓')} 州级分档已同步 ${ok.length} 个州：${ok.join(' ')}`);
@@ -194,6 +206,35 @@ function upstreamStaleness(node: unknown): number | undefined {
 }
 
 /**
+ * 逐字段检查一份分档表里有没有「已经落后于目标税年」的字段。
+ *
+ * 这不是理论问题：加拿大联邦表的**费率**更新到了 2026（0.14），
+ * **阈值**却停留在 2025。valueForYear 取「不晚于目标年的最新值」，
+ * 于是 2025 的阈值被当成 2026 的用了——错得悄无声息。
+ *
+ * 只看整份文件的最后更新时间不够，必须逐字段看。
+ */
+function staleFields(node: unknown, taxYear: number): string[] {
+  const list = (node as { brackets?: unknown[] })?.brackets ?? [];
+  const stale: string[] = [];
+  list.forEach((b, i) => {
+    const entry = b as { threshold?: unknown; rate?: unknown };
+    for (const [name, part] of [
+      ['阈值', entry.threshold],
+      ['费率', entry.rate],
+    ] as const) {
+      // 第一档阈值恒为 0，从不需要更新，不算过期
+      if (name === '阈值' && i === 0) continue;
+      const latest = latestEffectiveDate(datedValues(part));
+      if (latest && Number(latest.slice(0, 4)) < taxYear) {
+        stale.push(`第${i + 1}档${name}(最后更新 ${latest.slice(0, 4)})`);
+      }
+    }
+  });
+  return stale;
+}
+
+/**
  * PolicyEngine 的分档表通用结构：[{ threshold: { values }, rate: { values } }, ...]
  * 加拿大的省级表和美国的州级表用的是同一种形状，所以共用这个解析器。
  */
@@ -213,9 +254,16 @@ function parseCaSchedule(node: unknown): Bracket[] {
 }
 
 async function syncCa(): Promise<CaData> {
-  const federal = parseCaSchedule(
-    await fetchYaml(`${POLICYENGINE_CA_RAW}/${CA_FEDERAL_SCHEDULE}`),
-  );
+  const federalDoc = await fetchYaml(`${POLICYENGINE_CA_RAW}/${CA_FEDERAL_SCHEDULE}`);
+  const federal = parseCaSchedule(federalDoc);
+
+  const federalStale = staleFields(federalDoc, TAX_YEAR);
+  if (federalStale.length > 0) {
+    console.log(
+      `  ${red('!')} 联邦表有字段落后于 ${TAX_YEAR} 税年：${federalStale.join('、')}——` +
+        '本地改用手工维护值，见 regions/ca/federal.ts',
+    );
+  }
 
   const provincialBrackets: Record<string, Bracket[]> = {};
   for (const p of CA_PROVINCES) {
@@ -242,6 +290,8 @@ async function syncCa(): Promise<CaData> {
     syncedAt: new Date().toISOString().slice(0, 10),
     source: 'PolicyEngine/policyengine-canada',
     federalBrackets: federal,
+    /** 上游联邦表里落后于目标税年的字段。非空即表示不可直接采信。 */
+    federalStaleFields: federalStale,
     provincialBrackets,
   };
 }

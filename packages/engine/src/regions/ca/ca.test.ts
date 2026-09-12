@@ -7,6 +7,9 @@ import {
   CPP_BASIC_EXEMPTION,
   CPP_RATE,
   EI_MAX_INSURABLE,
+  FEDERAL_BRACKETS_PREV_YEAR,
+  FEDERAL_BRACKETS_UPSTREAM,
+  FEDERAL_INDEXATION_2026,
   EI_RATE,
   EI_RATE_QC,
   FEDERAL_BPA,
@@ -20,7 +23,7 @@ import {
   computePayroll,
   rrspRoom,
 } from './federal.js';
-import { computeSurtax, getProvince } from './provinces.js';
+import { CA_PROVINCES, computeSurtax, getProvince } from './provinces.js';
 import { defaultInput } from '../../defaults.js';
 import type { ProjectionInput } from '../../types.js';
 
@@ -47,23 +50,23 @@ const atSalary = (annual: number, province = 'ON', patch: (i: ProjectionInput) =
 describe('CPP 与 EI', () => {
   it('CPP 有基本免征额，前 3500 加元不计缴——这一点常被忽略', () => {
     expect(computePayroll(CPP_BASIC_EXEMPTION, false).cpp).toBeCloseTo(0, 6);
-    expect(computePayroll(10_000, false).cpp).toBeCloseTo((10_000 - 3_500) * 0.0595, 2);
+    expect(computePayroll(10_000, false).cpp).toBeCloseTo((10_000 - CPP_BASIC_EXEMPTION) * CPP_RATE, 2);
   });
 
   it('CPP 在 YMPE 处封顶，超出部分进入 CPP2 直到 YAMPE', () => {
     const p = computePayroll(100_000, false);
-    expect(p.cpp).toBeCloseTo((YMPE - CPP_BASIC_EXEMPTION) * 0.0595, 2);
-    expect(p.cpp).toBeCloseTo(4_034.1, 2);
-    expect(p.cpp2).toBeCloseTo((YAMPE - YMPE) * 0.04, 2);
-    expect(p.cpp2).toBeCloseTo(396, 2);
+    // 只断言恒等关系，不写死金额——限额每年都调，写死会在更新后误报
+    expect(p.cpp).toBeCloseTo((YMPE - CPP_BASIC_EXEMPTION) * CPP_RATE, 2);
+    expect(p.cpp2).toBeCloseTo((YAMPE - YMPE) * CPP2_RATE, 2);
     // 超过 YAMPE 后两级都不再增加
     const rich = computePayroll(500_000, false);
     expect(rich.cpp + rich.cpp2).toBeCloseTo(p.cpp + p.cpp2, 6);
   });
 
   it('EI 在最高可保收入处封顶', () => {
-    expect(computePayroll(100_000, false).ei).toBeCloseTo(EI_MAX_INSURABLE * 0.0164, 2);
-    expect(computePayroll(100_000, false).ei).toBeCloseTo(1_077.48, 2);
+    expect(computePayroll(100_000, false).ei).toBeCloseTo(EI_MAX_INSURABLE * EI_RATE, 2);
+    // 超过最高可保收入后再涨薪，保费一分不增
+    expect(computePayroll(500_000, false).ei).toBeCloseTo(computePayroll(100_000, false).ei, 6);
   });
 
   it('魁北克用 QPP（费率更高）与 QPIP，EI 费率则更低', () => {
@@ -98,22 +101,47 @@ describe('联邦与省税（黄金用例）', () => {
   it('安大略省税与附加税可手算复核', () => {
     const y = atSalary(100_000, 'ON');
     const on = getProvince('ON');
-    const before = 52_886 * 0.0505 + (100_000 - 52_886) * 0.0915;
-    const provincial = before - on.bpa * 0.0505;
+    // 阈值取自数据本身：安省每年按其自己的 CPI 指数化，写死会在更新后误报
+    const [b1, b2] = [on.brackets[0]!, on.brackets[1]!];
+    const before = b1.upTo * b1.rate + (100_000 - b1.upTo) * b2.rate;
+    const provincial = before - on.bpa * b1.rate;
     expect(y.taxBreakdown.find((t) => t.code === 'regional')!.amount).toBeCloseTo(provincial, 2);
     // 附加税对「省税额」而非收入计征
+    const s1 = on.surtax![0]!;
     expect(y.taxBreakdown.find((t) => t.code === 'surtax')!.amount).toBeCloseTo(
-      (provincial - 5_710) * 0.2,
+      (provincial - s1.threshold) * s1.rate,
       2,
     );
   });
 
   it('省税低于附加税门槛时不征附加税', () => {
     const on = getProvince('ON');
-    expect(computeSurtax(3_000, on)).toBe(0);
-    expect(computeSurtax(6_000, on)).toBeCloseTo((6_000 - 5_710) * 0.2, 6);
+    const [s1, s2] = [on.surtax![0]!, on.surtax![1]!];
+    expect(computeSurtax(s1.threshold - 1, on)).toBe(0);
+    // 落在两档之间：只征第一档
+    const mid = (s1.threshold + s2.threshold) / 2;
+    expect(computeSurtax(mid, on)).toBeCloseTo((mid - s1.threshold) * s1.rate, 6);
     // 高收入触发第二档，两档叠加
-    expect(computeSurtax(10_000, on)).toBeCloseTo((10_000 - 5_710) * 0.2 + (10_000 - 7_307) * 0.36, 6);
+    const high = s2.threshold * 1.5;
+    expect(computeSurtax(high, on)).toBeCloseTo(
+      (high - s1.threshold) * s1.rate + (high - s2.threshold) * s2.rate,
+      6,
+    );
+  });
+
+  it('省级分档单调递增、最高档无上界、税率递增', () => {
+    for (const prov of CA_PROVINCES) {
+      const rows = prov.brackets;
+      expect(rows.length, `${prov.code} 应有分档`).toBeGreaterThan(0);
+      expect(rows.at(-1)!.upTo, `${prov.code} 最高档应无上界`).toBe(Number.POSITIVE_INFINITY);
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i]!.upTo, `${prov.code} 第 ${i + 1} 档上界`).toBeGreaterThan(rows[i - 1]!.upTo);
+        expect(rows[i]!.rate, `${prov.code} 第 ${i + 1} 档税率`).toBeGreaterThan(rows[i - 1]!.rate);
+      }
+      // 基本个人金额在合理区间：艾伯塔最高 22,769，新斯科舍最低 11,932
+      expect(prov.bpa, `${prov.code} 基本个人金额`).toBeGreaterThan(10_000);
+      expect(prov.bpa, `${prov.code} 基本个人金额`).toBeLessThan(30_000);
+    }
   });
 
   it('基本个人金额是不可退还抵免（按最低档折算），不是所得扣除', () => {
@@ -220,6 +248,24 @@ describe('手工维护数据的自洽校验', () => {
   it('联邦基本个人金额高于 CPP 基本免征额，且在合理区间内', () => {
     expect(FEDERAL_BPA).toBeGreaterThan(CPP_BASIC_EXEMPTION);
     expect(FEDERAL_BPA).toBeLessThan(30_000);
+  });
+
+  it('联邦阈值符合 CRA 公布的通胀指数化系数——这是手工录入的第二道防线', () => {
+    // 每年的联邦阈值由上一年乘以 CRA 公布的指数化系数得出。
+    // 抄错一位数几乎不可能同时满足这个关系，所以它能抓住绝大多数录入错误。
+    // 指数化后各自四舍五入到整元，允许 1 元误差
+    FEDERAL_BRACKETS_PREV_YEAR.forEach((prev, i) => {
+      expect(Math.abs(FEDERAL_BRACKETS[i]!.upTo - prev * FEDERAL_INDEXATION_2026)).toBeLessThanOrEqual(1);
+    });
+    // 基本个人金额同样按该系数调整
+    expect(Math.abs(FEDERAL_BPA - 16_129 * FEDERAL_INDEXATION_2026)).toBeLessThanOrEqual(1);
+  });
+
+  it('上游联邦表已知落后，所以不参与计算——但保留下来做对照', () => {
+    // 上游的费率是对的（2026 已降到 14%），阈值却停在 2025。
+    // 如果哪天上游追上了，这条断言会失败，提醒我们可以切回同步值。
+    expect(FEDERAL_BRACKETS_UPSTREAM[0]!.rate).toBe(FEDERAL_BRACKETS[0]!.rate);
+    expect(FEDERAL_BRACKETS_UPSTREAM[0]!.upTo).toBeLessThan(FEDERAL_BRACKETS[0]!.upTo);
   });
 
   it('CPP/EI 数据带出处，过期会被 data:audit 发现', () => {

@@ -21,7 +21,8 @@
  *
  * 各省人社厅的年度公告。中国没有可用的官方接口
  * （国家统计局 easyquery 对自动化访问返回 403），
- * 靠 `pnpm data:check:cn` 做变更检测 + 人工核对，见 scripts/check-cn.ts。
+ * 靠 `pnpm data:check` 做变更检测 + 人工核对，见 scripts/check-sources.ts；
+ * 过期由 `pnpm data:audit` 负责报警。
  */
 
 import type { Provenance } from '../../data/provenance.js';
@@ -120,12 +121,15 @@ export const CN_PROVINCES: readonly ProvinceBase[] = [
   {
     code: 'jiangxi',
     name: { zh: '江西', en: 'Jiangxi' },
-    avgWage: 6_500,
+    // 2024 年度公布值 3,839 / 19,191 反推社平 6,397
+    avgWage: 6_397,
     provenance: {
       ...cnSocialYear(2024),
       verifiedAt: VERIFIED_AT,
-      confidence: 'estimated',
-      note: '江西省 2026 年度缴费基数截至核对日尚未公布，此处沿用 2024 年度的近似值',
+      // 数值本身是官方公布的真实值，只是期次旧——不是估算。
+      // 所以标 verified，由适用期负责让它显示为「已过期」。
+      confidence: 'verified',
+      note: '2024 年度上下限 3,839 / 19,191。江西省截至核对日尚未公布 2026 年度基数，请留意该省人社厅公告',
     },
   },
 ];

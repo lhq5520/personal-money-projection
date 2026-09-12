@@ -49,12 +49,12 @@ describe('引擎的数据时效警告', () => {
     expect(r.warnings.some((w) => w.code === 'data-expired')).toBe(true);
   });
 
-  it('未核对的城市明确标记为待核对，不静默使用估算值', () => {
-    // 南昌所属的江西省截至核对日尚未公布 2026 年度基数，是唯一仍为估算的省份
+  it('数据旧与数据未核对是两回事，警告也应分开', () => {
+    // 南昌所属的江西省尚未公布 2026 年度基数，用的是 2024 年度的**官方公布值**。
+    // 数字本身经过核对，只是期次旧——所以该报「已过期」，不该报「待核对」。
     const r = projectTimeline(withCity('nanchang'), 7.2, at('2026-09-12'));
-    expect(r.warnings.some((w) => w.code === 'data-unverified')).toBe(true);
-    // 数据停留在 2024 社保年度，同时也已过期
     expect(r.warnings.some((w) => w.code === 'data-expired')).toBe(true);
+    expect(r.warnings.some((w) => w.code === 'data-unverified')).toBe(false);
   });
 
   it('已核对的省份下属各市都不报警——省级统筹，一处更新全省受益', () => {

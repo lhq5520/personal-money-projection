@@ -16,11 +16,36 @@ import type { Provenance } from '../../data/provenance.js';
 import { calendarYear } from '../../data/provenance.js';
 import { CA_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 
-export const CA_TAX_YEAR = CA_GENERATED.taxYear;
+export const CA_TAX_YEAR = 2026;
 export const CA_DATA_SYNCED_AT = CA_GENERATED.syncedAt;
 
-/** 联邦税率表（同步自 PolicyEngine，按生效日期取当前税年的值） */
-export const FEDERAL_BRACKETS: readonly TaxBracket[] = restoreBrackets(CA_GENERATED.federalBrackets);
+/**
+ * 联邦税率表（2026 税年，手工维护）。
+ *
+ * **为什么不用同步值**：上游 PolicyEngine 的联邦表里，费率更新到了 2026（0.14），
+ * 阈值却停留在 2025。取「不晚于目标年的最新值」就会把 2025 的阈值当成 2026 用——
+ * 错得悄无声息。sync.ts 现在会逐字段检测并报警，但修复只能靠手工值。
+ *
+ * 这些数字可由 CRA 公布的 2026 年通胀指数化系数 2.0% 从 2025 值验算得出：
+ *   57,375 × 1.02 = 58,523　114,750 × 1.02 = 117,045
+ *   177,882 × 1.02 = 181,440　253,414 × 1.02 = 258,482
+ * 四个阈值全部吻合，见 ca.test.ts 的指数化校验。
+ */
+export const FEDERAL_INDEXATION_2026 = 1.02;
+
+export const FEDERAL_BRACKETS: readonly TaxBracket[] = [
+  { upTo: 58_523, rate: 0.14 },
+  { upTo: 117_045, rate: 0.205 },
+  { upTo: 181_440, rate: 0.26 },
+  { upTo: 258_482, rate: 0.29 },
+  { upTo: Number.POSITIVE_INFINITY, rate: 0.33 },
+];
+
+/** 上一税年的联邦阈值，供指数化校验用 */
+export const FEDERAL_BRACKETS_PREV_YEAR: readonly number[] = [57_375, 114_750, 177_882, 253_414];
+
+/** 上游同步下来的联邦表，仅作交叉对照，不参与计算 */
+export const FEDERAL_BRACKETS_UPSTREAM = restoreBrackets(CA_GENERATED.federalBrackets);
 
 /**
  * CPP / EI / BPA 这批限额**每年都调**，且没有任何可自动同步的源：
@@ -29,7 +54,7 @@ export const FEDERAL_BRACKETS: readonly TaxBracket[] = restoreBrackets(CA_GENERA
  * 所以它们带独立的出处元数据，由 `pnpm data:audit` 在适用期结束后让 CI 变红——
  * 抓不到新值是一回事，静默地continue用旧值是另一回事。
  */
-export const CA_PAYROLL_TAX_YEAR = 2025;
+export const CA_PAYROLL_TAX_YEAR = 2026;
 
 export const CA_PAYROLL_PROVENANCE: Provenance = {
   ...calendarYear(CA_PAYROLL_TAX_YEAR),
@@ -40,15 +65,15 @@ export const CA_PAYROLL_PROVENANCE: Provenance = {
   note: 'CPP/EI 各项限额与联邦基本个人金额为手工维护：上游 PolicyEngine 无 CPP/EI 参数，CRA 仅提供 HTML 页面',
 };
 
-/** 联邦基本个人金额（最高档）。高收入者逐步递减至 14,538，此处不建模该递减。 */
-export const FEDERAL_BPA = 16_129;
+/** 联邦基本个人金额（最高档，2026）。高收入者自 181,440 起递减至 14,829，此处不建模该递减。 */
+export const FEDERAL_BPA = 16_452;
 
 /* ------------------------------------------------------------ CPP / QPP */
 
 /** 年度最高可计退休金收入 */
-export const YMPE = 71_300;
+export const YMPE = 74_600;
 /** 第二级最高可计退休金收入 */
-export const YAMPE = 81_200;
+export const YAMPE = 85_000;
 /** 基本免征额 */
 export const CPP_BASIC_EXEMPTION = 3_500;
 export const CPP_RATE = 0.0595;
@@ -59,13 +84,13 @@ export const CPP2_RATE = 0.04;
 
 /* ---------------------------------------------------------------- EI */
 
-export const EI_MAX_INSURABLE = 65_700;
-export const EI_RATE = 0.0164;
+export const EI_MAX_INSURABLE = 68_900;
+export const EI_RATE = 0.0163;
 /** 魁北克因另有 QPIP，EI 费率较低 */
-export const EI_RATE_QC = 0.0131;
+export const EI_RATE_QC = 0.013;
 /** 魁北克育儿保险 */
-export const QPIP_RATE = 0.00494;
-export const QPIP_MAX_INSURABLE = 98_000;
+export const QPIP_RATE = 0.0043;
+export const QPIP_MAX_INSURABLE = 103_000;
 
 /** 魁北克居民的联邦税返还比例 */
 export const QUEBEC_ABATEMENT = 0.165;
@@ -112,7 +137,7 @@ export function computePayroll(grossAnnual: number, isQuebec: boolean): PayrollR
 
 /** RRSP 年度缴款上限：上年度收入的 18%，且不超过绝对上限 */
 export const RRSP_RATE_LIMIT = 0.18;
-export const RRSP_DOLLAR_LIMIT = 32_490;
+export const RRSP_DOLLAR_LIMIT = 33_810;
 
 export function rrspRoom(earnedIncome: number): number {
   return Math.min(earnedIncome * RRSP_RATE_LIMIT, RRSP_DOLLAR_LIMIT);

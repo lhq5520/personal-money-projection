@@ -67,8 +67,15 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
 
   // ---- 州与地方 ----
   const band = stateBand(filingStatus);
-  const stateTaxable = state.brackets ? Math.max(0, agi - state.standardDeduction[band]) : 0;
-  const stateTax = state.brackets ? bracketTax(state.brackets[band], stateTaxable) : 0;
+  // 麻州允许从州应税所得里抵扣最多 2,000 美元的 FICA
+  const stateFicaDeduction = Math.min(fica.total, state.ficaDeductionCap ?? 0);
+  const stateTaxable = state.brackets
+    ? Math.max(0, agi - state.standardDeduction[band] - stateFicaDeduction)
+    : 0;
+  // 免税额抵免从税额里直接扣，不是从应税所得里扣——两者对低收入者的影响差别很大
+  const stateBeforeCredit = state.brackets ? bracketTax(state.brackets[band], stateTaxable) : 0;
+  const stateCredit = state.exemptionCredit?.[band] ?? 0;
+  const stateTax = Math.max(0, stateBeforeCredit - stateCredit);
   const localTax = state.localRate ? stateTaxable * state.localRate : 0;
 
   const taxBreakdown: TaxComponent[] = [{ code: 'national', amount: federalTax }];

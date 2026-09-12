@@ -102,7 +102,26 @@ describe('联邦所得税（黄金用例）', () => {
     const ca = getState('CA');
     // 阈值取自同步数据：加州每年按 CPI 调整分档，写死会在数据更新后误报
     const taxable = 100_000 - ca.standardDeduction.single;
-    expect(state).toBeCloseTo(bracketTax(ca.brackets!.single, taxable), 2);
+    // 加州的个人免税额是从税额里直接抵扣的，不是从应税所得里扣
+    const expected = bracketTax(ca.brackets!.single, taxable) - ca.exemptionCredit!.single;
+    expect(state).toBeCloseTo(expected, 2);
+  });
+
+  it('免税额抵免从税额里扣，低收入者受益比例更大', () => {
+    const ca = getState('CA');
+    const credit = ca.exemptionCredit!.single;
+    expect(credit).toBeGreaterThan(0);
+    // 同一笔固定抵免，占低收入者州税的比例远高于高收入者
+    const lowShare = credit / atSalary(45_000).taxBreakdown.find((t) => t.code === 'regional')!.amount;
+    const highShare = credit / atSalary(400_000).taxBreakdown.find((t) => t.code === 'regional')!.amount;
+    expect(lowShare).toBeGreaterThan(highShare * 10);
+  });
+
+  it('抵免不会把州税压成负数', () => {
+    // 收入低到几乎不交州税时，抵免只能把税额降到 0
+    const y = atSalary(12_000);
+    const state = y.taxBreakdown.find((t) => t.code === 'regional')?.amount ?? 0;
+    expect(state).toBeGreaterThanOrEqual(0);
   });
 
   it('加州分档已同步到当前税年，不再是手工的旧值', () => {

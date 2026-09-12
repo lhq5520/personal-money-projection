@@ -16,10 +16,12 @@
  * 只能靠 check-cn.ts 做变更检测 + 人工核对。
  */
 
+// 两个仓库的默认分支不一样：policyengine-us 是 main，policyengine-canada 是 master。
+// 写错会直接 404——所以 sync.ts 在抓取失败时必须非零退出，不能只在日志里一闪而过。
 export const POLICYENGINE_US_RAW =
   'https://raw.githubusercontent.com/PolicyEngine/policyengine-us/main/policyengine_us/parameters';
 export const POLICYENGINE_CA_RAW =
-  'https://raw.githubusercontent.com/PolicyEngine/policyengine-canada/main/policyengine_canada/parameters';
+  'https://raw.githubusercontent.com/PolicyEngine/policyengine-canada/master/policyengine_canada/parameters';
 
 export const POLICYENGINE_API = 'https://api.policyengine.org';
 

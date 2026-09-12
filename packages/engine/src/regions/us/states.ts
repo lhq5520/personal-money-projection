@@ -27,6 +27,19 @@ export interface StateTax {
   /** 地方所得税的粗略估算比例（如纽约市居民、马里兰县税） */
   localRate?: number;
   localNote?: LocalizedName;
+  /**
+   * 个人免税额抵免：从算出的州税里直接扣除的固定金额（不是从应税所得里扣）。
+   *
+   * 加州、俄勒冈等州用的是「抵免」而非「扣除」，对低收入者影响尤其大——
+   * 加州单身 149 美元的抵免，在年收入 4.5 万时能占到州税的近 20%。
+   * 差分验证里加州低收入段的偏差正是由此而来。
+   */
+  exemptionCredit?: { single: number; married: number };
+  /**
+   * 允许从州应税所得中抵扣的 FICA 上限。目前只有麻州有这条规则
+   * （最多 2,000 美元），不建模的话每年会多算约 100 美元州税。
+   */
+  ficaDeductionCap?: number;
   /** 该州的建模是否为近似 */
   approximate?: boolean;
 }
@@ -95,6 +108,7 @@ export const US_STATES: readonly StateTax[] = [
     standardDeduction: { single: 5_540, married: 11_080 },
     // 加州 SDI 自 2024 年起取消工资上限，全额工资计征
     payroll: { rate: 0.012 },
+    exemptionCredit: { single: 149, married: 298 },
     approximate: true,
   },
   {
@@ -227,7 +241,7 @@ export const US_STATES: readonly StateTax[] = [
         { upTo: INF, rate: 0.0985 },
       ],
     },
-    standardDeduction: { single: 14_575, married: 29_150 },
+    standardDeduction: { single: 14_950, married: 29_900 },
     approximate: true,
   },
   {
@@ -247,22 +261,30 @@ export const US_STATES: readonly StateTax[] = [
         { upTo: INF, rate: 0.099 },
       ],
     },
-    standardDeduction: { single: 2_745, married: 5_495 },
+    standardDeduction: { single: 2_800, married: 5_600 },
+    exemptionCredit: { single: 250, married: 500 },
     approximate: true,
   },
   {
     code: 'OH',
     name: { zh: '俄亥俄', en: 'Ohio' },
+    // 俄亥俄 2026 年完成多年的税率扁平化：原 0% / 2.75% / 3.5% 三档变为
+    // 26,050 美元以下免税、以上单一 2.75%。
+    //
+    // 已知建模缺口：俄亥俄的个人免税额按 AGI 分三档递减、另有营业所得扣除与
+    // 联合申报抵免，本模型都未覆盖，差分验证中低收入段偏差可达 30% 以上。
+    //
+    // 这个州刻意不走 data:sync——上游把第一档编码成 0.0127448 的「隐含平均税率」
+    // 用来模拟跨档时加收的固定额，当成边际税率从 0 起征会对低收入者多征税。
+    // 详见 scripts/sources.ts。
     brackets: {
       single: [
         { upTo: 26_050, rate: 0 },
-        { upTo: 100_000, rate: 0.0275 },
-        { upTo: INF, rate: 0.035 },
+        { upTo: INF, rate: 0.0275 },
       ],
       married: [
         { upTo: 26_050, rate: 0 },
-        { upTo: 100_000, rate: 0.0275 },
-        { upTo: INF, rate: 0.035 },
+        { upTo: INF, rate: 0.0275 },
       ],
     },
     standardDeduction: NO_DEDUCTION,
@@ -311,7 +333,29 @@ export const US_STATES: readonly StateTax[] = [
   flat('PA', '宾夕法尼亚', 'Pennsylvania', 0.0307),
   flat('UT', '犹他', 'Utah', 0.0455),
   flat('KY', '肯塔基', 'Kentucky', 0.04, { single: 3_270, married: 6_540 }),
-  flat('MA', '马萨诸塞', 'Massachusetts', 0.05),
+  {
+    code: 'MA',
+    name: { zh: '马萨诸塞', en: 'Massachusetts' },
+    // 麻州在 5% 单一税率之上另有「百万富翁附加税」（2022 年 Fair Share 修正案）：
+    // 超过门槛的部分加征 4%，等效于第二档 9%。门槛随通胀调整，2026 年为 1,053,750。
+    //
+    // 麻州也不走 data:sync：它按 A/B/C 类收入分别计税，上游没有可直接采用的分档文件。
+    brackets: {
+      single: [
+        { upTo: 1_053_750, rate: 0.05 },
+        { upTo: INF, rate: 0.09 },
+      ],
+      married: [
+        { upTo: 1_053_750, rate: 0.05 },
+        { upTo: INF, rate: 0.09 },
+      ],
+    },
+    // 麻州的个人免税额（单身 4,400 / 已婚 8,800）作用等同于标准扣除，
+    // 另外允许从应税所得里抵扣最多 2,000 美元的 FICA。
+    standardDeduction: { single: 4_400, married: 8_800 },
+    ficaDeductionCap: 2_000,
+    approximate: true,
+  },
   flat('AZ', '亚利桑那', 'Arizona', 0.025, { single: 15_000, married: 30_000 }),
   flat('GA', '佐治亚', 'Georgia', 0.0519, { single: 12_000, married: 24_000 }),
   flat('ID', '爱达荷', 'Idaho', 0.05695, { single: 15_000, married: 30_000 }),
@@ -327,7 +371,7 @@ export const US_STATES: readonly StateTax[] = [
 ];
 
 /** 未能同步、仍为手工维护的州所对应的税年 */
-export const MANUAL_STATE_TAX_YEAR = 2025;
+export const MANUAL_STATE_TAX_YEAR = 2026;
 
 /**
  * 取某个州当前实际生效的分档表。
