@@ -16,6 +16,12 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Prisma Client 是生成产物、不进仓库，不生成的话 apps/api 的类型检查必然失败。
+      # generate 只读 schema 不连库，占位 URL 足够满足 datasource 的 env() 求值。
+      - name: 生成 Prisma Client
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgresql://placeholder
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @pmp/web build
