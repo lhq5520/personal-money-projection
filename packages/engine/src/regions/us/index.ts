@@ -1,4 +1,9 @@
-/** 美国地区模块：联邦 + FICA + 州（+ 已知的重要地方税）。 */
+/**
+ * The US region module: federal + FICA + state, plus the local taxes significant enough to
+ * matter.
+ *
+ * 美国地区模块：联邦 + FICA + 州（+ 已知的重要地方税）。
+ */
 
 import type {
   ContributionComponent,
@@ -22,7 +27,10 @@ import {
 } from './federal.js';
 import { DEFAULT_STATE, US_STATES, getState, stateDataTaxYear } from './states.js';
 
-/** 州级税率表只区分「单身档」与「已婚合并档」 */
+/**
+ * State bracket tables only distinguish a "single" band from a "married filing jointly" band.
+ * 州级税率表只区分「单身档」与「已婚合并档」
+ */
 const stateBand = (status: UsFilingStatus): 'single' | 'married' =>
   status === 'married-joint' ? 'married' : 'single';
 
@@ -34,10 +42,12 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
   const grossAnnual = monthlySalary * input.income.salaryMonths;
   const bonus = monthlySalary * Math.max(0, input.income.salaryMonths - 12);
 
+  // Traditional 401(k) contributions are bounded by the statutory annual limit.
   // 401(k) 传统缴款受法定年度上限约束
   const planSelfAnnual = Math.min(grossAnnual * pretaxRetirementRate, ELECTIVE_DEFERRAL_LIMIT);
   const planEmployerAnnual = grossAnnual * employerMatchRate;
 
+  // Key point: a 401(k) lowers the income tax base only — it does **not** lower the FICA base.
   // 关键：401(k) 只降低所得税税基，**不降低 FICA 税基**
   const fica = computeFica(grossAnnual, filingStatus);
 
@@ -57,7 +67,7 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
   }
   const socialInsuranceAnnual = fica.total + statePayroll;
 
-  // ---- 联邦 ----
+  // ---- Federal 联邦 ----
   const agi = grossAnnual - planSelfAnnual;
   const federalDeduction = Math.max(FEDERAL_STANDARD_DEDUCTION[filingStatus], itemizedDeduction);
   const federalTaxable = Math.max(0, agi - federalDeduction);
@@ -65,13 +75,16 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
   const credit = Math.min(federalBeforeCredit, childTaxCredit(qualifyingChildren, agi, filingStatus));
   const federalTax = federalBeforeCredit - credit;
 
-  // ---- 州与地方 ----
+  // ---- State & local 州与地方 ----
   const band = stateBand(filingStatus);
+  // Massachusetts allows up to $2,000 of FICA to be deducted from state taxable income.
   // 麻州允许从州应税所得里抵扣最多 2,000 美元的 FICA
   const stateFicaDeduction = Math.min(fica.total, state.ficaDeductionCap ?? 0);
   const stateTaxable = state.brackets
     ? Math.max(0, agi - state.standardDeduction[band] - stateFicaDeduction)
     : 0;
+  // The exemption credit comes off the tax itself, not off taxable income — the difference is
+  // large for low earners.
   // 免税额抵免从税额里直接扣，不是从应税所得里扣——两者对低收入者的影响差别很大
   const stateBeforeCredit = state.brackets ? bracketTax(state.brackets[band], stateTaxable) : 0;
   const stateCredit = state.exemptionCredit?.[band] ?? 0;
@@ -142,8 +155,12 @@ export const US_REGION: RegionModule = {
   provenanceFor: (jurisdiction): Provenance => {
     const state = getState(jurisdiction);
     const syncKey = state.code === 'NYC' ? 'NY' : state.code;
+    // A state with no income tax has no state-level data that can expire, so the federal year
+    // is the whole story.
     // 无州所得税的州没有会过期的州级数据，口径就是联邦的年份
     const stateYear = state.brackets ? stateDataTaxYear(syncKey) : US_TAX_YEAR;
+    // If any one component is stale the combined answer isn't fresh either, so take the older
+    // of the two years.
     // 一个组件过期，整体结论就不能算新鲜，所以取两者中更旧的年份
     const effectiveYear = Math.min(US_TAX_YEAR, stateYear);
     const synced = stateYear === US_TAX_YEAR;
@@ -151,6 +168,10 @@ export const US_REGION: RegionModule = {
       ...calendarYear(effectiveYear),
       sourceUrl: 'https://github.com/PolicyEngine/policyengine-us',
       verifiedAt: US_DATA_SYNCED_AT,
+      // "Stale" and "incompletely modeled" are two separate dimensions — don't conflate them:
+      // the effective period (effectiveTo) expresses the first, confidence the second.
+      // California's brackets are synced to the current tax year, but we don't model its
+      // personal exemption credit, so it still counts as estimated.
       // 「数据旧」和「建模不全」是两个维度，不要混为一谈：
       // 适用期（effectiveTo）表达前者，confidence 表达后者。
       // 加州的分档已同步到当前税年，但我们没建模它的个人免税额抵免，仍算 estimated。

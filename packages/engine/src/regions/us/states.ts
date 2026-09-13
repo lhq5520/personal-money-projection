@@ -1,4 +1,18 @@
 /**
+ * US state income tax (2025 tax year).
+ *
+ * ⚠️ Coverage and precision note
+ *  - States with no income tax: exact.
+ *  - Flat-rate states: exact.
+ *  - Progressive states: the bracket tables are here, but standard deductions, personal
+ *    exemptions, and local surtaxes (New York City, Maryland county tax) vary enormously from
+ *    state to state. The model goes as far as "state brackets + standard deduction", plus an
+ *    optional flat-rate estimate for the local taxes big enough to matter.
+ *  - An entry with `approximate: true` means that state's real rules are more involved than
+ *    the model, and the result is only right to within an order of magnitude.
+ *
+ * Every value can be overridden in the UI. Please check them against your actual return.
+ *
  * 美国州级所得税（2025 税年）。
  *
  * ⚠️ 覆盖范围与精度声明
@@ -19,15 +33,29 @@ import { US_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 export interface StateTax {
   code: string;
   name: LocalizedName;
-  /** null 表示该州不征收个人所得税 */
+  /** null means the state levies no personal income tax. null 表示该州不征收个人所得税 */
   brackets: { single: readonly TaxBracket[]; married: readonly TaxBracket[] } | null;
   standardDeduction: { single: number; married: number };
-  /** 州级强制保险（如加州 SDI、纽约州 PFL），按工资计征 */
+  /**
+   * State-mandated insurance levied on wages, e.g. California SDI or New York PFL.
+   * 州级强制保险（如加州 SDI、纽约州 PFL），按工资计征
+   */
   payroll?: { rate: number; wageCap?: number };
-  /** 地方所得税的粗略估算比例（如纽约市居民、马里兰县税） */
+  /**
+   * Rough flat-rate estimate of local income tax, e.g. for NYC residents or Maryland county tax.
+   * 地方所得税的粗略估算比例（如纽约市居民、马里兰县税）
+   */
   localRate?: number;
   localNote?: LocalizedName;
   /**
+   * Personal exemption credit: a fixed amount subtracted from the computed state tax itself,
+   * not from taxable income.
+   *
+   * California, Oregon and others use a *credit* rather than a *deduction*, which matters most
+   * to low earners — California's $149 single credit is nearly 20% of state tax at $45k of
+   * income. This is exactly where the California low-income deviation in differential
+   * verification came from.
+   *
    * 个人免税额抵免：从算出的州税里直接扣除的固定金额（不是从应税所得里扣）。
    *
    * 加州、俄勒冈等州用的是「抵免」而非「扣除」，对低收入者影响尤其大——
@@ -36,22 +64,25 @@ export interface StateTax {
    */
   exemptionCredit?: { single: number; married: number };
   /**
+   * Cap on FICA deductible from state taxable income. Only Massachusetts has this rule today
+   * (up to $2,000); not modeling it overstates state tax by roughly $100 a year.
+   *
    * 允许从州应税所得中抵扣的 FICA 上限。目前只有麻州有这条规则
    * （最多 2,000 美元），不建模的话每年会多算约 100 美元州税。
    */
   ficaDeductionCap?: number;
-  /** 该州的建模是否为近似 */
+  /** Whether this state's modeling is approximate. 该州的建模是否为近似 */
   approximate?: boolean;
 }
 
 const NO_DEDUCTION = { single: 0, married: 0 };
 
-/** 无个人所得税的州 */
+/** A state with no personal income tax. 无个人所得税的州 */
 function noTax(code: string, zh: string, en: string): StateTax {
   return { code, name: { zh, en }, brackets: null, standardDeduction: NO_DEDUCTION };
 }
 
-/** 单一税率州 */
+/** A flat-rate state. 单一税率州 */
 function flat(
   code: string,
   zh: string,
@@ -66,7 +97,7 @@ function flat(
 const INF = Number.POSITIVE_INFINITY;
 
 export const US_STATES: readonly StateTax[] = [
-  // ---------- 无所得税 ----------
+  // ---------- No income tax 无所得税 ----------
   noTax('TX', '得克萨斯', 'Texas'),
   noTax('FL', '佛罗里达', 'Florida'),
   noTax('WA', '华盛顿州', 'Washington'),
@@ -77,7 +108,7 @@ export const US_STATES: readonly StateTax[] = [
   noTax('AK', '阿拉斯加', 'Alaska'),
   noTax('NH', '新罕布什尔', 'New Hampshire'),
 
-  // ---------- 累进 ----------
+  // ---------- Progressive 累进 ----------
   {
     code: 'CA',
     name: { zh: '加利福尼亚', en: 'California' },
@@ -106,6 +137,7 @@ export const US_STATES: readonly StateTax[] = [
       ],
     },
     standardDeduction: { single: 5_540, married: 11_080 },
+    // California removed the SDI wage cap in 2024; it now applies to the full wage.
     // 加州 SDI 自 2024 年起取消工资上限，全额工资计征
     payroll: { rate: 0.012 },
     exemptionCredit: { single: 149, married: 298 },
@@ -200,6 +232,8 @@ export const US_STATES: readonly StateTax[] = [
         { upTo: INF, rate: 0.1075 },
       ],
     },
+    // New Jersey has no standard deduction, only a personal exemption ($1,000 single /
+    // $2,000 married).
     // 新泽西没有标准扣除，只有个人豁免（单身 1000 / 已婚 2000）
     standardDeduction: { single: 1_000, married: 2_000 },
     approximate: true,
@@ -268,12 +302,21 @@ export const US_STATES: readonly StateTax[] = [
   {
     code: 'OH',
     name: { zh: '俄亥俄', en: 'Ohio' },
+    // Ohio completed its multi-year rate flattening in 2026: the former 0% / 2.75% / 3.5%
+    // three-bracket structure became tax-free below $26,050 and a flat 2.75% above.
     // 俄亥俄 2026 年完成多年的税率扁平化：原 0% / 2.75% / 3.5% 三档变为
     // 26,050 美元以下免税、以上单一 2.75%。
     //
+    // Known modeling gaps: Ohio's personal exemption phases down across three AGI tiers, and
+    // there are business-income deductions and a joint-filing credit — none of which this
+    // model covers. Differential verification shows deviations above 30% at low incomes.
     // 已知建模缺口：俄亥俄的个人免税额按 AGI 分三档递减、另有营业所得扣除与
     // 联合申报抵免，本模型都未覆盖，差分验证中低收入段偏差可达 30% 以上。
     //
+    // This state is deliberately excluded from data:sync — upstream encodes the first bracket
+    // as an "implied average rate" of 0.0127448 to simulate a fixed amount added on crossing a
+    // bracket. Treating that as a marginal rate starting from zero overtaxes low earners.
+    // See scripts/sources.ts for details.
     // 这个州刻意不走 data:sync——上游把第一档编码成 0.0127448 的「隐含平均税率」
     // 用来模拟跨档时加收的固定额，当成边际税率从 0 起征会对低收入者多征税。
     // 详见 scripts/sources.ts。
@@ -324,7 +367,7 @@ export const US_STATES: readonly StateTax[] = [
     approximate: true,
   },
 
-  // ---------- 单一税率 ----------
+  // ---------- Flat rate 单一税率 ----------
   flat('CO', '科罗拉多', 'Colorado', 0.044, { single: 15_000, married: 30_000 }),
   flat('IL', '伊利诺伊', 'Illinois', 0.0495),
   flat('IN', '印第安纳', 'Indiana', 0.0305),
@@ -336,9 +379,14 @@ export const US_STATES: readonly StateTax[] = [
   {
     code: 'MA',
     name: { zh: '马萨诸塞', en: 'Massachusetts' },
+    // On top of its flat 5%, Massachusetts has a "millionaire's surtax" (the 2022 Fair Share
+    // amendment): an extra 4% on income above the threshold, equivalent to a second bracket at
+    // 9%. The threshold is inflation-adjusted and is 1,053,750 for 2026.
     // 麻州在 5% 单一税率之上另有「百万富翁附加税」（2022 年 Fair Share 修正案）：
     // 超过门槛的部分加征 4%，等效于第二档 9%。门槛随通胀调整，2026 年为 1,053,750。
     //
+    // Massachusetts is also excluded from data:sync: it taxes Part A/B/C income separately,
+    // and upstream has no bracket file that can be adopted directly.
     // 麻州也不走 data:sync：它按 A/B/C 类收入分别计税，上游没有可直接采用的分档文件。
     brackets: {
       single: [
@@ -350,6 +398,9 @@ export const US_STATES: readonly StateTax[] = [
         { upTo: INF, rate: 0.09 },
       ],
     },
+    // Massachusetts' personal exemption ($4,400 single / $8,800 married) functions as a
+    // standard deduction, and it additionally allows up to $2,000 of FICA to be deducted from
+    // taxable income.
     // 麻州的个人免税额（单身 4,400 / 已婚 8,800）作用等同于标准扣除，
     // 另外允许从应税所得里抵扣最多 2,000 美元的 FICA。
     standardDeduction: { single: 4_400, married: 8_800 },
@@ -361,7 +412,7 @@ export const US_STATES: readonly StateTax[] = [
   flat('ID', '爱达荷', 'Idaho', 0.05695, { single: 15_000, married: 30_000 }),
   flat('MS', '密西西比', 'Mississippi', 0.044, { single: 2_300, married: 4_600 }),
 
-  // ---------- 全手动 ----------
+  // ---------- Fully manual 全手动 ----------
   {
     code: 'CUSTOM',
     name: { zh: '自定义', en: 'Custom' },
@@ -370,10 +421,19 @@ export const US_STATES: readonly StateTax[] = [
   },
 ];
 
-/** 未能同步、仍为手工维护的州所对应的税年 */
+/**
+ * The tax year for states that couldn't be synced and are still maintained by hand.
+ * 未能同步、仍为手工维护的州所对应的税年
+ */
 export const MANUAL_STATE_TAX_YEAR = 2026;
 
 /**
+ * Get the bracket table actually in effect for a given state.
+ *
+ * Prefer values synced by `data:sync` — state brackets are inflation-adjusted every year, so
+ * hand-written ones are guaranteed to go stale. States absent upstream or deliberately
+ * excluded (Ohio, see the notes in scripts/sources.ts) fall back to the manual values here.
+ *
  * 取某个州当前实际生效的分档表。
  *
  * 优先用 `data:sync` 同步下来的值——州级分档每年随通胀调整，手写的必然会过期。
@@ -388,7 +448,12 @@ function bracketsFor(
   return { single: restoreBrackets(synced.single), married: restoreBrackets(synced.married) };
 }
 
-/** 该州的分档是同步来的还是手工维护的，决定它的数据时效口径 */
+/**
+ * Whether this state's brackets came from a sync or are hand-maintained, which determines how
+ * its data vintage is reported.
+ *
+ * 该州的分档是同步来的还是手工维护的，决定它的数据时效口径
+ */
 export function stateDataTaxYear(code: string): number {
   return US_GENERATED.states?.[code] ? US_GENERATED.taxYear : MANUAL_STATE_TAX_YEAR;
 }
@@ -397,6 +462,7 @@ export const DEFAULT_STATE = 'CA';
 
 export function getState(code: string): StateTax {
   const base = US_STATES.find((s) => s.code === code) ?? US_STATES.find((s) => s.code === DEFAULT_STATE)!;
+  // New York City shares New York State's brackets and adds the city tax on top.
   // 纽约市共用纽约州的分档，另加市税
   const syncKey = base.code === 'NYC' ? 'NY' : base.code;
   const brackets = bracketsFor(syncKey, base.brackets);

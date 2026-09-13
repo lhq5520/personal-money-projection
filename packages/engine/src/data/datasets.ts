@@ -1,4 +1,18 @@
 /**
+ * The inventory of every maintained dataset.
+ *
+ * ## Why this exists
+ *
+ * "Keep the data always current" is not achievable — none of the three countries has an
+ * official data interface, and rate tables are legislation and administrative notices, not
+ * data services. What *is* achievable, and matters more:
+ * **guarantee that stale data is always detected**.
+ *
+ * This inventory centralizes each dataset's effective period, source, and degree of
+ * automation. `pnpm data:audit` walks it and turns CI red the moment any entry expires.
+ * Failing to fetch a new value is one thing; silently continuing to use the old one is
+ * another.
+ *
  * 全部受维护数据集的清单。
  *
  * ## 为什么需要这个
@@ -23,13 +37,23 @@ import { CA_PAYROLL_PROVENANCE } from '../regions/ca/federal.js';
 import { PROVINCIAL_DATA_TAX_YEAR } from '../regions/ca/provinces.js';
 import { CA_GENERATED } from './generated/index.js';
 
-/** 数据集的自动化程度。决定过期时该怎么办。 */
+/**
+ * How automated a dataset is. Determines what to do when it expires.
+ * 数据集的自动化程度。决定过期时该怎么办。
+ */
 export type Automation =
-  /** 由 `pnpm data:sync` 全自动同步，过期通常意味着同步任务坏了 */
+  /**
+   * Fully synced by `pnpm data:sync`; expiry usually means the sync job broke.
+   * 由 `pnpm data:sync` 全自动同步，过期通常意味着同步任务坏了
+   */
   | 'synced'
-  /** 有上游但刻意不采信（上游更旧、或编码方式不可直接使用），过期需人工核对 */
+  /**
+   * An upstream exists but is deliberately not trusted (it's older, or encodes values in a
+   * form that can't be used directly); expiry requires manual verification.
+   * 有上游但刻意不采信（上游更旧、或编码方式不可直接使用），过期需人工核对
+   */
   | 'upstream-rejected'
-  /** 无任何上游，只能人工核对 */
+  /** No upstream at all; manual verification only. 无任何上游，只能人工核对 */
   | 'manual';
 
 export interface Dataset {
@@ -38,7 +62,10 @@ export interface Dataset {
   region: 'CN' | 'US' | 'CA';
   automation: Automation;
   provenance: Provenance;
-  /** 过期时该做什么，直接展示给维护者 */
+  /**
+   * What to do when this expires; shown to the maintainer verbatim.
+   * 过期时该做什么，直接展示给维护者
+   */
   action: string;
 }
 
@@ -47,7 +74,7 @@ const gh = 'https://github.com/PolicyEngine';
 export function allDatasets(): Dataset[] {
   const out: Dataset[] = [];
 
-  /* ------------------------------------------------------------ 中国 */
+  /* ------------------------------------------------------ China 中国 */
   for (const p of CN_PROVINCES) {
     out.push({
       id: `cn-${p.code}`,
@@ -59,7 +86,7 @@ export function allDatasets(): Dataset[] {
     });
   }
 
-  /* ------------------------------------------------------------ 美国 */
+  /* ---------------------------------------- United States 美国 */
   out.push({
     id: 'us-federal',
     label: '美国 · 联邦分档 / 标准扣除 / 社保工资基数上限',
@@ -107,7 +134,7 @@ export function allDatasets(): Dataset[] {
     action: '查各州税务局当年的标准扣除额，更新 regions/us/states.ts 的 standardDeduction',
   });
 
-  /* ---------------------------------------------------------- 加拿大 */
+  /* -------------------------------------------------- Canada 加拿大 */
   out.push({
     id: 'ca-federal-brackets',
     label: '加拿大 · 联邦分档',

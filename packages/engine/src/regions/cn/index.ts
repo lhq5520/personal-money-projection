@@ -1,4 +1,4 @@
-/** 中国地区模块。 */
+/** The China region module. 中国地区模块。 */
 
 import type { ProjectionInput, TaxComponent, YearIncome } from '../../types.js';
 import type { RegionModule } from '../types.js';
@@ -20,6 +20,8 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
   const specialDeductionAnnual = monthlySpecialDeduction(input.cn.deductions, city) * 12;
   const deductionAnnual = c.taxDeductible * 12 + specialDeductionAnnual + BASIC_DEDUCTION_ANNUAL;
 
+  // May be negative: when regular salary can't absorb all the deductions, the unused allowance
+  // can be soaked up by the year-end bonus.
   // 可能为负：常规工资不足以用满全部扣除时，未用完的额度可被年终奖吸收
   const taxableBeforeBonus = regularAnnual - deductionAnnual;
   const choice = chooseBonusTaxStrategy(taxableBeforeBonus, bonus, input.cn.allowSeparateBonusTax);
@@ -32,6 +34,9 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
         ]
       : [{ code: 'national', amount: choice.totalTax }];
 
+  // The employee housing fund share is withheld from pay but lands in an account you own — it
+  // isn't money that disappears, so it's excluded from "take-home cash" and accumulated in the
+  // account balance instead.
   // 公积金个人部分从工资扣除，但进入你自己的账户，不算消失的钱，
   // 所以不计入「到手现金」，而是单独在账户余额里累计。
   const netAnnual = grossAnnual - socialInsuranceAnnual - planSelfAnnual - choice.totalTax;

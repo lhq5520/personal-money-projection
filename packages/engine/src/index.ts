@@ -5,17 +5,17 @@ export * from './invest.js';
 export * from './project.js';
 export * from './random.js';
 
-// ---- 数据出处与时效 ----
+// ---- Data provenance & freshness 数据出处与时效 ----
 export { calendarYear, checkFreshness, cnSocialYear } from './data/provenance.js';
 export type { Confidence, DataFreshness, Provenance } from './data/provenance.js';
 export { US_GENERATED, CA_GENERATED } from './data/generated/index.js';
 
-// ---- 地区框架 ----
+// ---- Region framework 地区框架 ----
 export { REGIONS, REGION_CODES, getRegion, getJurisdiction } from './regions/registry.js';
 export type { Jurisdiction, LocalizedName, RegionModule } from './regions/types.js';
 export { bracketTax, findBracket, nonRefundableCredit, clamp } from './tax/brackets.js';
 
-// ---- 中国 ----
+// ---- China 中国 ----
 export {
   CN_CITIES,
   CN_JURISDICTIONS,
@@ -40,7 +40,7 @@ export type { BonusTaxChoice } from './regions/cn/tax.js';
 export { computeContributions, monthlySpecialDeduction } from './regions/cn/social.js';
 export type { CnContributions } from './regions/cn/social.js';
 
-// ---- 美国 ----
+// ---- United States 美国 ----
 export {
   ELECTIVE_DEFERRAL_LIMIT,
   FEDERAL_BRACKETS as US_FEDERAL_BRACKETS,
@@ -58,7 +58,7 @@ export {
 } from './regions/us/states.js';
 export type { StateTax } from './regions/us/states.js';
 
-// ---- 加拿大 ----
+// ---- Canada 加拿大 ----
 export {
   FEDERAL_BPA as CA_FEDERAL_BPA,
   FEDERAL_BRACKETS as CA_FEDERAL_BRACKETS,

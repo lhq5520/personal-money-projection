@@ -1,4 +1,32 @@
 /**
+ * Driver values for China's provincial social insurance contribution bases.
+ *
+ * ## Why by province and not by city
+ *
+ * Contribution bases are **pooled provincially**: every city in a province shares the same
+ * "full-caliber average monthly wage of employees in urban units", from which the floor and
+ * ceiling are derived by the statutory 60% / 300% rule. So what actually needs maintaining is
+ * 21 provincial numbers, not 34 city ones — Nanjing, Suzhou and Wuxi all use the same Jiangsu
+ * value.
+ *
+ * A few cities have additional municipal rules (Shenzhen/Guangzhou pool medical municipally,
+ * and the housing fund is set on a municipal basis); those are overridden per insurance type
+ * with `bases` in cities.ts.
+ *
+ * ## Effective periods are not uniform
+ *
+ * Most provinces run a social insurance year from July 1 to June 30, but:
+ *   - Anhui and Heilongjiang follow the calendar year (starting January 1)
+ *   - Zhejiang splits the year in half; the second-half value is used here
+ * So each province records its own effective period — no single assumption works.
+ *
+ * ## Data sources
+ *
+ * Annual notices from each province's human resources department. China has no usable official
+ * interface (the National Bureau of Statistics' easyquery returns 403 to automated access), so
+ * `pnpm data:check` does change detection plus manual verification — see
+ * scripts/check-sources.ts — and `pnpm data:audit` raises the alarm on expiry.
+ *
  * 中国省级社保缴费基数的驱动值。
  *
  * ## 为什么按省而不按市
@@ -32,14 +60,22 @@ import type { LocalizedName } from '../types.js';
 export interface ProvinceBase {
   code: string;
   name: LocalizedName;
-  /** 全口径城镇单位就业人员月平均工资；上下限按 60% / 300% 推导 */
+  /**
+   * Full-caliber average monthly wage of employees in urban units; the floor and ceiling are
+   * derived from it at 60% / 300%.
+   *
+   * 全口径城镇单位就业人员月平均工资；上下限按 60% / 300% 推导
+   */
   avgWage: number;
   provenance: Provenance;
 }
 
 const VERIFIED_AT = '2026-09-12';
 
-/** 多数省份：2026 社保年度（2026-07-01 ~ 2027-06-30） */
+/**
+ * Most provinces: the 2026 social insurance year (2026-07-01 ~ 2027-06-30).
+ * 多数省份：2026 社保年度（2026-07-01 ~ 2027-06-30）
+ */
 const sy2026 = (note: string): Provenance => ({
   ...cnSocialYear(2026),
   verifiedAt: VERIFIED_AT,
@@ -47,7 +83,10 @@ const sy2026 = (note: string): Provenance => ({
   note,
 });
 
-/** 安徽、黑龙江等按自然年执行的省份 */
+/**
+ * Provinces that run on the calendar year, such as Anhui and Heilongjiang.
+ * 安徽、黑龙江等按自然年执行的省份
+ */
 const cy2026 = (note: string): Provenance => ({
   ...calendarYear(2026),
   verifiedAt: VERIFIED_AT,
@@ -55,7 +94,10 @@ const cy2026 = (note: string): Provenance => ({
   note,
 });
 
-/** 由公布的上限反推社平：上限 = 社平 × 300% */
+/**
+ * Back out the average wage from a published ceiling: ceiling = average × 300%.
+ * 由公布的上限反推社平：上限 = 社平 × 300%
+ */
 const fromCeiling = (ceiling: number): number => Math.round(ceiling / 3);
 
 const p = (
@@ -72,7 +114,7 @@ const p = (
 });
 
 export const CN_PROVINCES: readonly ProvinceBase[] = [
-  // ---- 直辖市：各自独立统筹 ----
+  // ---- Municipalities, each pooled independently 直辖市：各自独立统筹 ----
   {
     code: 'shanghai',
     name: { zh: '上海', en: 'Shanghai' },
@@ -88,10 +130,11 @@ export const CN_PROVINCES: readonly ProvinceBase[] = [
   p('tianjin', '天津', 'Tianjin', 25_620, sy2026('上下限 5,124 / 25,620')),
   p('chongqing', '重庆', 'Chongqing', 22_250, sy2026('上下限 4,450 / 22,250')),
 
-  // ---- 各省 ----
+  // ---- Provinces 各省 ----
   p('guangdong', '广东', 'Guangdong', 27_549, sy2026('养老按省级统筹，上下限 5,510 / 27,549；医保各市另行统筹')),
   p('jiangsu', '江苏', 'Jiangsu', 24_762, sy2026('上下限 4,952 / 24,762')),
   p('zhejiang', '浙江', 'Zhejiang', 26_730, {
+    // Zhejiang splits the year into two periods; the second-half value is used here.
     // 浙江把一年拆成两段执行，这里取下半年的值
     effectiveFrom: '2026-07-01',
     effectiveTo: '2026-12-31',
@@ -117,15 +160,19 @@ export const CN_PROVINCES: readonly ProvinceBase[] = [
   p('anhui', '安徽', 'Anhui', 21_772, cy2026('按自然年执行：上下限 4,354 / 21,772，2026-01-01 起')),
   p('heilongjiang', '黑龙江', 'Heilongjiang', 23_115, cy2026('按自然年执行：上下限 4,623 / 23,115，2026-01-01 起')),
 
-  // ---- 尚未公布 2026 年度值 ----
+  // ---- 2026 figures not yet published 尚未公布 2026 年度值 ----
   {
     code: 'jiangxi',
     name: { zh: '江西', en: 'Jiangxi' },
+    // The published 2024 figures 3,839 / 19,191 imply an average wage of 6,397.
     // 2024 年度公布值 3,839 / 19,191 反推社平 6,397
     avgWage: 6_397,
     provenance: {
       ...cnSocialYear(2024),
       verifiedAt: VERIFIED_AT,
+      // The numbers themselves are genuine published figures, just from an older period —
+      // they are not estimates. So mark them verified and let the effective period be what
+      // surfaces them as "expired".
       // 数值本身是官方公布的真实值，只是期次旧——不是估算。
       // 所以标 verified，由适用期负责让它显示为「已过期」。
       confidence: 'verified',

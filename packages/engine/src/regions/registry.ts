@@ -1,4 +1,9 @@
-/** 地区注册表：通用流程通过它拿到当前地区的实现，不直接依赖任何具体国家。 */
+/**
+ * The region registry: generic flows reach the active region's implementation through it and
+ * never depend on any specific country directly.
+ *
+ * 地区注册表：通用流程通过它拿到当前地区的实现，不直接依赖任何具体国家。
+ */
 
 import type { RegionCode } from '../types.js';
 import type { Jurisdiction, RegionModule } from './types.js';

@@ -1,4 +1,13 @@
 /**
+ * The salary timeline.
+ *
+ * The prototype page held salary constant for 40 years, one of the biggest structural
+ * distortions in a long-horizon projection: a 25-year-old earning 15k a month would still be
+ * earning 15k a month 40 years later — i.e. assuming a lifetime of zero raises.
+ *
+ * Per-year tax settlement has moved down into the region modules (regions/*); only the
+ * country-agnostic part lives here.
+ *
  * 薪资时间轴。
  *
  * 原型页面把工资视为 40 年恒定，这是长期投影里最大的结构性失真之一：
@@ -11,6 +20,10 @@ import type { ProjectionInput, YearIncome } from './types.js';
 import { getRegion } from './regions/registry.js';
 
 /**
+ * Resolve monthly salary year by year.
+ * Years named explicitly in `salarySteps` override that year's salary outright; every other
+ * year grows from the previous one at `annualGrowthRate`.
+ *
  * 逐年解析月薪。
  * salarySteps 中显式指定的年份直接覆盖当年月薪，其余年份在上一年基础上按 annualGrowthRate 增长。
  */
@@ -29,7 +42,7 @@ export function resolveSalarySchedule(input: ProjectionInput): number[] {
   return schedule;
 }
 
-/** 派发到当前地区的税务实现 */
+/** Dispatch to the active region's tax implementation. 派发到当前地区的税务实现 */
 export function computeYearIncome(
   input: ProjectionInput,
   year: number,

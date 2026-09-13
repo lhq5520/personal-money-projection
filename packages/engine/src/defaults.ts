@@ -1,7 +1,12 @@
 import type { CaParams, CnParams, ProjectionInput, RegionCode, UsParams } from './types.js';
 import { getRegion } from './regions/registry.js';
 
-/** 三个地区的参数同时保留，切换国家时不会丢掉另一边已填好的设置 */
+/**
+ * Parameters for all three regions are kept at once, so switching countries doesn't discard
+ * settings already filled in for another.
+ *
+ * 三个地区的参数同时保留，切换国家时不会丢掉另一边已填好的设置
+ */
 export const DEFAULT_CN_PARAMS: CnParams = {
   allowSeparateBonusTax: true,
   deductions: {
@@ -29,6 +34,10 @@ export const DEFAULT_CA_PARAMS: CaParams = {
 };
 
 /**
+ * Default starting parameters per region.
+ * China reuses the prototype page's values so the two can be compared side by side; the US and
+ * Canada use median assumptions that are plausible at their own scale.
+ *
  * 各地区的默认起始参数。
  * 中国沿用原型页面的取值以便对照；美加取各自量级上合理的中位数假设。
  */
@@ -56,6 +65,7 @@ export function defaultInput(region: RegionCode = 'CN'): ProjectionInput {
       annualGrowthRate: 0.03,
     },
     employerPlan: {
+      // Only China's housing fund supports withdrawals.
       // 只有中国公积金支持提取
       monthlyWithdrawal: region === 'CN' ? 1_500 : 0,
       annualInterestRate: 0.015,
@@ -68,6 +78,8 @@ export function defaultInput(region: RegionCode = 'CN'): ProjectionInput {
       annualVolatility: 0.16,
       feeDragAnnual: region === 'CN' ? 0.008 : 0.0003,
       dividendYield: 0.013,
+      // A Chinese investor holding US ETFs is typically withheld 10% on dividends; US and
+      // Canadian domestic holders settle it at filing time instead.
       // 中国投资者持有美股 ETF 的股息通常被预扣 10%；美加本土持有者在报税时处理
       dividendWithholdingTax: region === 'CN' ? 0.1 : 0,
       investRatio: 1,
@@ -81,6 +93,11 @@ export function defaultInput(region: RegionCode = 'CN'): ProjectionInput {
 
 export const DEFAULT_INPUT: ProjectionInput = defaultInput('CN');
 
-/** 蒙特卡洛默认跑 2000 条路径：在浏览器里 40 年期约几十毫秒，肉眼无感 */
+/**
+ * The Monte Carlo runs 2,000 paths by default: a 40-year horizon takes a few tens of
+ * milliseconds in the browser — imperceptible.
+ *
+ * 蒙特卡洛默认跑 2000 条路径：在浏览器里 40 年期约几十毫秒，肉眼无感
+ */
 export const DEFAULT_MC_PATHS = 2_000;
 export const DEFAULT_MC_SEED = 20260101;

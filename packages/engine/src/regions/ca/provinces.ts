@@ -1,4 +1,20 @@
 /**
+ * Canadian provincial income tax (2026 tax year).
+ *
+ * Data comes from the CRA's official "Current year tax rates and income brackets" page, with
+ * Quebec from Revenu Québec (the CRA does not administer Quebec tax). Basic Personal Amounts
+ * come from the TaxTips summary.
+ *
+ * **Maintained by hand**: upstream PolicyEngine's provincial data has been stuck on 2022–2023
+ * for a long time, so syncing would be a regression; `pnpm data:sync` actively flags it in red
+ * as not to be trusted. After an update, the bracket monotonicity and magnitude checks in
+ * ca.test.ts are the guardrail.
+ *
+ * ⚠️ Precision note:
+ * Ontario's surtax matters materially and is modeled; the Ontario Health Premium (up to CAD
+ * 900) and assorted small provincial credits are not. Quebec runs its own tax system with a
+ * federal abatement, handled separately.
+ *
  * 加拿大省级个人所得税（2026 税年）。
  *
  * 数据来自 CRA「Current year tax rates and income brackets」官方页面，
@@ -20,9 +36,16 @@ export interface ProvinceTax {
   code: string;
   name: LocalizedName;
   brackets: readonly TaxBracket[];
-  /** 省级基本个人金额，按最低档税率折算为不可退还抵免 */
+  /**
+   * Provincial Basic Personal Amount, converted into a non-refundable credit at the lowest
+   * bracket rate.
+   * 省级基本个人金额，按最低档税率折算为不可退还抵免
+   */
   bpa: number;
   /**
+   * Provincial surtax: a further tax on the provincial tax itself, above a threshold.
+   * Only Ontario has a material effect today.
+   *
    * 省级附加税：对超出门槛的省税本身再征税。
    * 目前只有安大略省有实质影响。
    */
@@ -44,6 +67,9 @@ export const CA_PROVINCES: readonly ProvinceTax[] = [
       { upTo: INF, rate: 0.1316 },
     ],
     bpa: 12_989,
+    // Ontario's surtax is levied on the provincial tax amount, not on income, and the two
+    // tiers stack. Thresholds drift up each year with Ontario's 1.9% indexation factor:
+    // 5,710 × 1.019 = 5,818 and 7,307 × 1.019 = 7,446.
     // 安省附加税按「省税额」而非收入计征，两档叠加
     // 门槛随安省 1.9% 的指数化系数逐年上移：5,710 × 1.019 = 5,818，7,307 × 1.019 = 7,446
     surtax: [
@@ -164,6 +190,10 @@ export const CA_PROVINCES: readonly ProvinceTax[] = [
 ];
 
 /**
+ * The tax year the provincial bracket data belongs to. Maintained by hand — upstream
+ * PolicyEngine's provincial data has long been stuck on 2022–2023, older than what's here, so
+ * syncing would be a regression.
+ *
  * 省级分档数据所属的税年。手工维护——上游 PolicyEngine 的省级数据
  * 长期停留在 2022–2023 年，比这里还旧，同步反而是倒退。
  */
@@ -178,7 +208,10 @@ export function getProvince(code: string): ProvinceTax {
   );
 }
 
-/** 安省式附加税：对省税额本身分档加征 */
+/**
+ * Ontario-style surtax: tiered surcharges levied on the provincial tax amount itself.
+ * 安省式附加税：对省税额本身分档加征
+ */
 export function computeSurtax(provincialTax: number, province: ProvinceTax): number {
   if (!province.surtax) return 0;
   return province.surtax.reduce(

@@ -1,6 +1,14 @@
-/** 可复现的伪随机数发生器。蒙特卡洛必须可复现，否则同样的输入每次刷新给出不同结论。 */
+/**
+ * Reproducible pseudo-random number generation. A Monte Carlo has to be reproducible —
+ * otherwise the same inputs would yield a different conclusion on every refresh.
+ *
+ * 可复现的伪随机数发生器。蒙特卡洛必须可复现，否则同样的输入每次刷新给出不同结论。
+ */
 
-/** mulberry32：小、快、统计性质足够好的 32 位种子 PRNG */
+/**
+ * mulberry32: a small, fast 32-bit-seeded PRNG with good enough statistical properties.
+ * mulberry32：小、快、统计性质足够好的 32 位种子 PRNG
+ */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return function next(): number {
@@ -12,7 +20,12 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-/** Box–Muller 变换，把均匀分布转成标准正态。缓存第二个值避免浪费一半的计算。 */
+/**
+ * The Box–Muller transform, turning a uniform distribution into a standard normal one.
+ * The second value is cached so half the work isn't thrown away.
+ *
+ * Box–Muller 变换，把均匀分布转成标准正态。缓存第二个值避免浪费一半的计算。
+ */
 export function gaussianFactory(rand: () => number): () => number {
   let spare: number | null = null;
   return function nextGaussian(): number {
@@ -35,7 +48,10 @@ export function gaussianFactory(rand: () => number): () => number {
   };
 }
 
-/** 线性插值分位数。sorted 必须已升序排列。 */
+/**
+ * Linearly interpolated percentile. `sorted` must already be in ascending order.
+ * 线性插值分位数。sorted 必须已升序排列。
+ */
 export function percentile(sorted: ArrayLike<number>, p: number): number {
   const n = sorted.length;
   if (n === 0) return 0;

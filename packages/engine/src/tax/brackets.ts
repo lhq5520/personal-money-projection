@@ -1,4 +1,12 @@
 /**
+ * Generic progressive tax computation.
+ *
+ * China publishes its official bracket tables as "rate + quick-deduction constant", while
+ * the US and Canadian tables give only per-bracket rates. The two forms are mathematically
+ * equivalent, and both are supported here: if a quick-deduction constant is present we take
+ * the shortcut (which matches the published figures to the cent), otherwise we accumulate
+ * bracket by bracket.
+ *
  * 通用累进税率计算。
  *
  * 中国的官方税率表以「税率 + 速算扣除数」形式发布，美加的表则只给分档税率。
@@ -35,6 +43,10 @@ export function bracketTax(brackets: readonly TaxBracket[], taxableIncome: numbe
 }
 
 /**
+ * A Canadian-style non-refundable tax credit: credit = credit base × lowest bracket rate.
+ * Unlike subtracting from taxable income, a credit like this isn't worth more to someone
+ * in a higher bracket.
+ *
  * 加拿大式的不可退还税收抵免：抵免额 = 抵免基数 × 最低档税率。
  * 与「从应税所得里减掉」不同，这种抵免对高收入者的价值不会更高。
  */
@@ -43,5 +55,5 @@ export function nonRefundableCredit(brackets: readonly TaxBracket[], creditBase:
   return lowest ? Math.max(0, creditBase) * lowest.rate : 0;
 }
 
-/** 把金额限制在 [min, max] 区间内 */
+/** Clamp a value into the [min, max] range. 把金额限制在 [min, max] 区间内 */
 export const clamp = (v: number, min: number, max: number): number => Math.min(Math.max(v, min), max);

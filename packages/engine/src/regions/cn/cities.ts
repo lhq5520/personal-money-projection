@@ -1,4 +1,25 @@
 /**
+ * China city-level parameters for the "five insurances and one fund".
+ *
+ * ## The data is provincial; cities only reference it
+ *
+ * Social insurance contribution bases are **pooled at the provincial level**: every city in a
+ * province shares one full-caliber average wage, and the floor/ceiling are derived by the
+ * statutory 60% / 300% rule. So the driver values live in provinces.ts, and this file records
+ * only what belongs to a city — minimum wage, unemployment insurance rate, housing fund rate,
+ * rent deduction tier, and the handful of base overrides caused by municipal pooling.
+ *
+ * That derivation has been verified to the yuan against official figures: Shanghai's 2025
+ * full-caliber average wage of 12,577 → floor ×0.6 = 7,546 and ceiling ×3 = 37,731, exactly
+ * matching the figures published by the human resources bureau.
+ *
+ * ## The exception: municipally pooled insurance types
+ *
+ * In Guangdong, pension is pooled provincially while medical is pooled municipally, and their
+ * bases **differ** — Shenzhen's pension ceiling is 27,549 while its medical ceiling is 33,633.
+ * Cases like that use `bases` to override per insurance type. The housing fund likewise
+ * generally sets its base on a municipal basis, unrelated to the pension base.
+ *
  * 中国城市级五险一金参数。
  *
  * ## 数据是省级的，城市只做引用
@@ -28,7 +49,10 @@ export interface BaseRange {
   max: number;
 }
 
-/** 参与逐险种基数覆盖的项目 */
+/**
+ * The items eligible for a per-insurance-type base override.
+ * 参与逐险种基数覆盖的项目
+ */
 export interface CityBases {
   pension?: BaseRange;
   medical?: BaseRange;
@@ -40,15 +64,28 @@ export interface CityProfile {
   code: string;
   name: LocalizedName;
   /**
+   * Code of the provincial pooling unit this city belongs to. The social insurance base driver
+   * values live in provinces.ts and are shared by every city in the province, so maintenance
+   * only means updating the provincial number.
+   *
    * 所属省级统筹单位的 code。社保基数的驱动值在 provinces.ts，
    * 同省各市共用，因此维护时只需更新省级数字。
    */
   province: string;
-  /** 当地月最低工资，作为公积金缴存基数下限 */
+  /**
+   * Local monthly minimum wage, used as the floor of the housing fund contribution base.
+   * 当地月最低工资，作为公积金缴存基数下限
+   */
   minWage: number;
-  /** 逐险种的基数区间覆盖（市级统筹或本市另有规定时使用） */
+  /**
+   * Per-insurance-type base range overrides, for municipal pooling or local rules.
+   * 逐险种的基数区间覆盖（市级统筹或本市另有规定时使用）
+   */
   bases?: CityBases;
-  /** 失业保险个人费率，各地在 0.2%–0.5% 之间 */
+  /**
+   * Employee unemployment insurance rate; 0.2%–0.5% depending on locality.
+   * 失业保险个人费率，各地在 0.2%–0.5% 之间
+   */
   unemployment: number;
   hfRateDefault: number;
   hfRateMin: number;
@@ -56,11 +93,14 @@ export interface CityProfile {
   rentTier: RentTier;
 }
 
-/** 养老与医疗的个人费率全国统一 */
+/**
+ * Employee pension and medical rates are uniform nationwide.
+ * 养老与医疗的个人费率全国统一
+ */
 export const CN_PENSION_RATE = 0.08;
 export const CN_MEDICAL_RATE = 0.02;
 
-/** 法规规定的基数系数 */
+/** The base coefficients set by regulation. 法规规定的基数系数 */
 export const SOCIAL_BASE_FLOOR_RATIO = 0.6;
 export const SOCIAL_BASE_CEIL_RATIO = 3;
 
@@ -86,17 +126,23 @@ const c = (
   ...extra,
 });
 
-/** 广东各市共用的养老基数下限覆盖：深圳按最低工资档，低于省级推导值 */
+/**
+ * The pension base override shared across Guangdong cities: Shenzhen uses the minimum-wage
+ * tier, which is below the provincially derived value.
+ *
+ * 广东各市共用的养老基数下限覆盖：深圳按最低工资档，低于省级推导值
+ */
 const GD_PENSION_SHENZHEN: BaseRange = { min: 4_775, max: 27_549 };
 
 export const CN_CITIES: readonly CityProfile[] = [
-  // ---- 直辖市 ----
+  // ---- Municipalities 直辖市 ----
   c('shanghai', '上海', 'Shanghai', 'shanghai', 2_740, 0.07, 'tier1', { hfRateMax: 0.07 }),
   c('beijing', '北京', 'Beijing', 'beijing', 2_540, 0.12, 'tier1'),
   c('tianjin', '天津', 'Tianjin', 'tianjin', 2_320, 0.08, 'tier1'),
   c('chongqing', '重庆', 'Chongqing', 'chongqing', 2_100, 0.08, 'tier1', { unemployment: 0.004 }),
 
-  // ---- 广东：养老省级统筹、医保市级统筹，基数不同 ----
+  // ---- Guangdong: pension pooled provincially, medical municipally — different bases
+  //      广东：养老省级统筹、医保市级统筹，基数不同 ----
   c('shenzhen', '深圳', 'Shenzhen', 'guangdong', 2_520, 0.05, 'tier1', {
     unemployment: 0.003,
     bases: {
@@ -122,29 +168,33 @@ export const CN_CITIES: readonly CityProfile[] = [
     bases: { housingFund: { min: 1_900, max: 27_549 } },
   }),
 
-  // ---- 江苏 ----
+  // ---- Jiangsu 江苏 ----
   c('nanjing', '南京', 'Nanjing', 'jiangsu', 2_490, 0.08, 'tier1'),
   c('suzhou', '苏州', 'Suzhou', 'jiangsu', 2_490, 0.08, 'tier2'),
   c('wuxi', '无锡', 'Wuxi', 'jiangsu', 2_490, 0.08, 'tier2'),
 
-  // ---- 浙江 ----
+  // ---- Zhejiang 浙江 ----
   c('hangzhou', '杭州', 'Hangzhou', 'zhejiang', 2_490, 0.12, 'tier1'),
+  // Ningbo is a separately-planned city; rent deduction uses tier1.
   // 宁波是计划单列市，租金扣除按 tier1
   c('ningbo', '宁波', 'Ningbo', 'zhejiang', 2_490, 0.12, 'tier1'),
 
-  // ---- 其余省会与重点城市 ----
+  // ---- Other provincial capitals and major cities 其余省会与重点城市 ----
   c('chengdu', '成都', 'Chengdu', 'sichuan', 2_100, 0.08, 'tier1', { unemployment: 0.004, hfRateMin: 0.06 }),
   c('wuhan', '武汉', 'Wuhan', 'hubei', 2_210, 0.08, 'tier1', { unemployment: 0.003 }),
   c('xian', '西安', "Xi'an", 'shaanxi', 2_160, 0.08, 'tier1', { unemployment: 0.003 }),
   c('zhengzhou', '郑州', 'Zhengzhou', 'henan', 2_100, 0.08, 'tier1', { unemployment: 0.003 }),
+  // Qingdao is a separately-planned city.
   // 青岛是计划单列市
   c('qingdao', '青岛', 'Qingdao', 'shandong', 2_200, 0.08, 'tier1'),
   c('jinan', '济南', 'Jinan', 'shandong', 2_200, 0.08, 'tier1'),
   c('taiyuan', '太原', 'Taiyuan', 'shanxi', 1_980, 0.08, 'tier1'),
   c('changsha', '长沙', 'Changsha', 'hunan', 2_100, 0.08, 'tier1', { unemployment: 0.002 }),
   c('shenyang', '沈阳', 'Shenyang', 'liaoning', 1_910, 0.08, 'tier1'),
+  // Dalian is a separately-planned city; rent deduction uses tier1.
   // 大连是计划单列市，租金扣除按 tier1
   c('dalian', '大连', 'Dalian', 'liaoning', 1_910, 0.08, 'tier1'),
+  // Xiamen is a separately-planned city; rent deduction uses tier1.
   // 厦门是计划单列市，租金扣除按 tier1
   c('xiamen', '厦门', 'Xiamen', 'fujian', 2_030, 0.08, 'tier1'),
   c('fuzhou', '福州', 'Fuzhou', 'fujian', 2_030, 0.08, 'tier1'),
@@ -158,7 +208,7 @@ export const CN_CITIES: readonly CityProfile[] = [
   c('harbin', '哈尔滨', 'Harbin', 'heilongjiang', 1_860, 0.08, 'tier1'),
   c('nanchang', '南昌', 'Nanchang', 'jiangxi', 1_850, 0.08, 'tier1'),
 
-  // ---- 全手动 ----
+  // ---- Fully manual 全手动 ----
   c('custom', '自定义', 'Custom', 'custom', 2_000, 0.07, 'tier1', {
     hfRateMin: 0,
     bases: {
@@ -176,7 +226,10 @@ export function getCity(code: string): CityProfile {
   return CN_CITIES.find((x) => x.code === code) ?? CN_CITIES.find((x) => x.code === DEFAULT_CITY)!;
 }
 
-/** 城市的数据出处即其所属省份的出处——基数是省级统筹的 */
+/**
+ * A city's provenance is its province's provenance — the bases are pooled provincially.
+ * 城市的数据出处即其所属省份的出处——基数是省级统筹的
+ */
 export function cityProvenance(city: CityProfile): Provenance {
   if (city.code === 'custom') {
     return {
@@ -189,7 +242,12 @@ export function cityProvenance(city: CityProfile): Provenance {
   return getProvince(city.province).provenance;
 }
 
-/** 按法定 60% / 300% 规则从所属省份的社平工资推导的默认基数区间 */
+/**
+ * The default base range, derived from the province's average wage by the statutory
+ * 60% / 300% rule.
+ *
+ * 按法定 60% / 300% 规则从所属省份的社平工资推导的默认基数区间
+ */
 export function derivedBase(city: CityProfile): BaseRange {
   const avgWage = getProvince(city.province).avgWage;
   return {
@@ -198,17 +256,32 @@ export function derivedBase(city: CityProfile): BaseRange {
   };
 }
 
-/** 取某一险种的基数区间：优先用逐险种覆盖，否则按规则推导 */
+/**
+ * Get the base range for one insurance type: use a per-type override if present, otherwise
+ * derive it by rule.
+ *
+ * 取某一险种的基数区间：优先用逐险种覆盖，否则按规则推导
+ */
 export function baseRangeFor(city: CityProfile, item: keyof CityBases): BaseRange {
   return city.bases?.[item] ?? derivedBase(city);
 }
 
-/** 公积金基数区间：下限为当地最低工资，上限通常同样是 3 倍社平 */
+/**
+ * Housing fund base range: the floor is the local minimum wage, and the ceiling is usually
+ * also 3× the average wage.
+ *
+ * 公积金基数区间：下限为当地最低工资，上限通常同样是 3 倍社平
+ */
 export function housingFundBaseRange(city: CityProfile): BaseRange {
   return city.bases?.housingFund ?? { min: city.minWage, max: derivedBase(city).max };
 }
 
-/** 兼容旧调用点：养老险的基数区间即通常意义上的「社保基数」 */
+/**
+ * Kept for older call sites: the pension base range is what's usually meant by "the social
+ * insurance base".
+ *
+ * 兼容旧调用点：养老险的基数区间即通常意义上的「社保基数」
+ */
 export function socialBaseRange(city: CityProfile): BaseRange {
   return baseRangeFor(city, 'pension');
 }

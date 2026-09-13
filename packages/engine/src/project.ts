@@ -1,4 +1,11 @@
 /**
+ * Top-level orchestration: weaves income, spending, the employer savings plan, and investing
+ * into a single month-by-month timeline.
+ *
+ * This layer is country-agnostic — every tax difference is resolved inside regions/*.
+ * Warnings come out as a structured code + params pair and are translated by the UI layer;
+ * the engine emits no natural language.
+ *
  * 主编排：把收入、支出、雇主储蓄计划、投资四条线合成一条逐月时间轴。
  *
  * 这一层与国别无关——所有税务差异都在 regions/* 里解决。
@@ -18,13 +25,20 @@ import { deterministicPath, netAnnualReturn, toMonthlyRate } from './invest.js';
 import { getRegion } from './regions/registry.js';
 import { checkFreshness } from './data/provenance.js';
 
-/** 中国个人年度购汇便利化额度，等值 5 万美元 */
+/**
+ * China's annual individual FX purchase quota, equivalent to USD 50,000.
+ * 中国个人年度购汇便利化额度，等值 5 万美元
+ */
 const FX_QUOTA_USD = 50_000;
 
 export function projectTimeline(
   input: ProjectionInput,
   usdCnyRate = 7.2,
   /**
+   * "Now" is injected rather than read from Date.now(): the engine has to be a pure function,
+   * or the same inputs would produce different warnings depending on today's date and tests
+   * would not be reproducible.
+   *
    * 注入「现在」而不是读 Date.now()：引擎必须是纯函数，
    * 否则同样的输入会因为今天几号而给出不同的警告，测试也无从复现。
    */
@@ -33,6 +47,8 @@ export function projectTimeline(
   const warnings: ProjectionWarning[] = [];
   const region = getRegion(input.region);
 
+  // The freshness check comes first: planning someone's next decade off a two-year-old
+  // contribution base misleads far more than any rounding detail ever could.
   // 数据时效检查放在最前面：拿两年前的缴费基数做十年期规划，
   // 比任何计算细节的偏差都更容易让人得出错误结论。
   const provenance = region.provenanceFor(input.jurisdiction);
@@ -58,6 +74,8 @@ export function projectTimeline(
   const years: YearIncome[] = salarySchedule.map((salary, i) => computeYearIncome(input, i + 1, salary));
   const realReturn = netAnnualReturn(input.investment);
 
+  // China's housing fund credits a fixed rate; 401(k) / RRSP are market accounts that track
+  // investment returns.
   // 中国公积金按固定利率结息；401(k) / RRSP 是市场投资账户，跟随投资收益增长
   const planAnnualRate =
     region.planGrowth === 'market' ? realReturn : input.employerPlan.annualInterestRate;
@@ -87,6 +105,7 @@ export function projectTimeline(
     }
 
     if (!planLimitReported && region.planAnnualLimit !== undefined) {
+      // Once the statutory cap is hit, actual contributions fall below the rate-implied amount.
       // 触及法定上限时，实际缴款会低于按比例应缴的金额
       const uncapped =
         input.region === 'US'
@@ -112,6 +131,8 @@ export function projectTimeline(
 
     for (let m = 0; m < 12; m++) {
       const accrued = planBalance * (1 + planMonthlyRate) + planSelfMonthly + planEmployerMonthly;
+      // Only China's housing fund supports withdrawals; 401(k) / RRSP withdrawals before
+      // retirement carry penalties, which the model doesn't cover.
       // 只有中国公积金支持提取；401(k) / RRSP 在退休前提取有罚则，模型不支持
       const requested = region.planWithdrawable ? input.employerPlan.monthlyWithdrawal : 0;
       const actualWithdrawal = Math.min(requested, Math.max(0, accrued));
@@ -179,6 +200,7 @@ export function projectTimeline(
     };
   });
 
+  // The FX quota is a China-specific constraint and doesn't apply elsewhere.
   // 购汇额度是中国特有的约束，其他地区不适用
   if (input.region === 'CN') {
     const firstYearInvestment = monthlyContributions.slice(0, 12).reduce((a, b) => a + b, 0);

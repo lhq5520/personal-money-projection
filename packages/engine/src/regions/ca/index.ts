@@ -1,4 +1,9 @@
-/** 加拿大地区模块：联邦 + CPP/EI + 省（含安省附加税与魁北克联邦返还）。 */
+/**
+ * The Canada region module: federal + CPP/EI + province, including Ontario's surtax and
+ * Quebec's federal abatement.
+ *
+ * 加拿大地区模块：联邦 + CPP/EI + 省（含安省附加税与魁北克联邦返还）。
+ */
 
 import type {
   ContributionComponent,
@@ -35,6 +40,8 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
   const grossAnnual = monthlySalary * input.income.salaryMonths;
   const bonus = monthlySalary * Math.max(0, input.income.salaryMonths - 12);
 
+  // RRSP contributions are bounded by contribution room: 18% of income, capped at an absolute
+  // dollar limit.
   // RRSP 缴款受「收入的 18% 且不超过绝对上限」的供款额度约束
   const planSelfAnnual = Math.min(grossAnnual * input.ca.rrspRate, rrspRoom(grossAnnual));
   const planEmployerAnnual = grossAnnual * input.ca.employerMatchRate;
@@ -48,10 +55,15 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
     socialBreakdown.push({ code: 'ca-cpp2', amount: payroll.cpp2, capped: payroll.cppCapped });
   }
 
+  // RRSP contributions are deducted from taxable income — same as a US 401(k), though
+  // Canada's CPP/EI are no more reduced by it than FICA is.
   // RRSP 缴款从应税所得中扣除（与美国 401(k) 相同，但加拿大的 CPP/EI 也不因此减少）
   const taxableIncome = Math.max(0, grossAnnual - planSelfAnnual);
 
-  // ---- 联邦 ----
+  // ---- Federal 联邦 ----
+  // The Basic Personal Amount is a non-refundable *credit*, not an income deduction: the
+  // credit equals base × lowest bracket rate, so it isn't worth more to a high earner. That's
+  // a structural difference between Canada and both the Chinese and US systems.
   // 基本个人金额是「不可退还抵免」而非所得扣除：抵免额 = 基数 × 最低档税率，
   // 因此它对高收入者的价值并不更高。这是加拿大与中美两国税制的一个结构性差异。
   const federalBefore = bracketTax(FEDERAL_BRACKETS, taxableIncome);
@@ -60,7 +72,7 @@ function computeYear(input: ProjectionInput, year: number, monthlySalary: number
   const abatement = isQuebec ? federalTax * QUEBEC_ABATEMENT : 0;
   federalTax -= abatement;
 
-  // ---- 省 ----
+  // ---- Provincial 省 ----
   const provincialBefore = bracketTax(province.brackets, taxableIncome);
   const provincialCredit = nonRefundableCredit(province.brackets, province.bpa);
   const provincialTax = Math.max(0, provincialBefore - provincialCredit);
@@ -130,6 +142,9 @@ export const CA_REGION: RegionModule = {
   planAnnualLimit: RRSP_DOLLAR_LIMIT,
   computeYear,
   provenanceFor: (): Provenance => ({
+    // Provincial brackets are hand-maintained: upstream PolicyEngine's provincial data is
+    // stuck on 2022–2023, older than this repo, so report the provincial data's year rather
+    // than the federal sync year.
     // 省级分档是手工维护的：上游 PolicyEngine 的省级数据停留在 2022–2023 年，
     // 比本仓库还旧，因此以省级数据的年份为准，而不是联邦的同步年份。
     ...calendarYear(PROVINCIAL_DATA_TAX_YEAR),

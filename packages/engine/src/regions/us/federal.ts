@@ -1,4 +1,16 @@
 /**
+ * US federal income tax and FICA.
+ *
+ * The bracket tables, standard deduction, and Social Security wage base are **no longer
+ * hard-coded**: `pnpm data:sync` pulls them from PolicyEngine into data/generated/us.json.
+ * That data is versioned by effective date and carries statutory citations, so it reflects
+ * mid-year changes correctly — e.g. the OBBBA retroactively raising the single standard
+ * deduction from 15,000 to 15,750 in July 2025.
+ *
+ * What remains hard-coded here is the **structure of the law** (rates, threshold rules, credit
+ * formulas). Those change far less often than the dollar amounts, and when they do it takes a
+ * code change rather than just a new number.
+ *
  * 美国联邦个人所得税与 FICA。
  *
  * 税率表、标准扣除与社保工资基数上限**不再硬编码**，而是由
@@ -16,7 +28,12 @@ import { US_GENERATED, restoreBrackets } from '../../data/generated/index.js';
 export const US_TAX_YEAR = US_GENERATED.taxYear;
 export const US_DATA_SYNCED_AT = US_GENERATED.syncedAt;
 
-/** 联邦普通所得税率表。美国的表不使用速算扣除数，由引擎逐档累进计算。 */
+/**
+ * Federal ordinary income brackets. The US tables carry no quick-deduction constant, so the
+ * engine accumulates bracket by bracket.
+ *
+ * 联邦普通所得税率表。美国的表不使用速算扣除数，由引擎逐档累进计算。
+ */
 export const FEDERAL_BRACKETS: Record<UsFilingStatus, readonly TaxBracket[]> = {
   single: restoreBrackets(US_GENERATED.brackets.single ?? []),
   'married-joint': restoreBrackets(US_GENERATED.brackets['married-joint'] ?? []),
@@ -34,12 +51,18 @@ export const FEDERAL_STANDARD_DEDUCTION: Record<UsFilingStatus, number> = {
 /* --------------------------------------------------------------- FICA */
 
 export const SOCIAL_SECURITY_RATE = 0.062;
-/** 社会保障税的工资基数上限，每年随全国平均工资指数调整 */
+/**
+ * Social Security wage base cap, indexed annually to the national average wage.
+ * 社会保障税的工资基数上限，每年随全国平均工资指数调整
+ */
 export const SOCIAL_SECURITY_WAGE_BASE = US_GENERATED.socialSecurityWageBase;
 export const MEDICARE_RATE = 0.0145;
 export const ADDITIONAL_MEDICARE_RATE = 0.009;
 
-/** 附加医疗保险税的起征点（按申报身份） */
+/**
+ * Additional Medicare Tax thresholds, by filing status.
+ * 附加医疗保险税的起征点（按申报身份）
+ */
 export const ADDITIONAL_MEDICARE_THRESHOLD: Record<UsFilingStatus, number> = {
   single: 200_000,
   'married-joint': 250_000,
@@ -47,10 +70,13 @@ export const ADDITIONAL_MEDICARE_THRESHOLD: Record<UsFilingStatus, number> = {
   'head-of-household': 200_000,
 };
 
-/** 401(k) 员工选择性递延的年度上限（不含 50 岁以上的追加额度） */
+/**
+ * Annual 401(k) elective deferral limit, excluding the age-50+ catch-up.
+ * 401(k) 员工选择性递延的年度上限（不含 50 岁以上的追加额度）
+ */
 export const ELECTIVE_DEFERRAL_LIMIT = 23_500;
 
-/* -------------------------------------------------------- 儿童税收抵免 */
+/* ------------------------------------------- Child Tax Credit 儿童税收抵免 */
 
 export const CHILD_TAX_CREDIT_PER_CHILD = 2_000;
 export const CHILD_TAX_CREDIT_PHASEOUT_START: Record<UsFilingStatus, number> = {
@@ -59,7 +85,7 @@ export const CHILD_TAX_CREDIT_PHASEOUT_START: Record<UsFilingStatus, number> = {
   'married-separate': 200_000,
   'head-of-household': 200_000,
 };
-/** 每超出 1000 美元减少 50 美元 */
+/** Reduced by $50 for every $1,000 over the threshold. 每超出 1000 美元减少 50 美元 */
 const PHASEOUT_STEP = 1_000;
 const PHASEOUT_REDUCTION = 50;
 
@@ -77,11 +103,20 @@ export interface FicaResult {
   medicare: number;
   additionalMedicare: number;
   total: number;
-  /** 工资是否已触及社会保障税基数上限 */
+  /**
+   * Whether wages have hit the Social Security wage base cap.
+   * 工资是否已触及社会保障税基数上限
+   */
   socialSecurityCapped: boolean;
 }
 
 /**
+ * FICA computation.
+ *
+ * The detail that matters: traditional 401(k) contributions **do not reduce the FICA base** —
+ * they only lower federal and state income tax. Many calculators get this wrong. Hence the
+ * full pre-tax wage is what gets passed in here.
+ *
  * FICA 计算。
  *
  * 关键细节：401(k) **传统缴款不减少 FICA 税基**——它只降低联邦和州的所得税，
