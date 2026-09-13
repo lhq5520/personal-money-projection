@@ -4,6 +4,12 @@ import { prisma } from './db.js';
 import { env } from './env.js';
 
 /**
+ * Better Auth configuration.
+ *
+ * The user tables are managed by Better Auth through the Prisma adapter; the user / session /
+ * account / verification tables in the schema are exactly the shape it requires. Better Auth
+ * hashes passwords, and no part of this project ever touches a plaintext one.
+ *
  * Better Auth 配置。
  *
  * 用户表由 Better Auth 通过 Prisma adapter 管理，schema 里的
@@ -16,15 +22,19 @@ export const auth = betterAuth({
   baseURL: env.authUrl,
   emailAndPassword: {
     enabled: true,
+    // Email verification isn't enforced in development; wire up a mail service and flip this to
+    // true before going live.
     // 开发阶段不强制验证邮箱；上线前应接入邮件服务并改为 true
     requireEmailVerification: false,
     minPasswordLength: 8,
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 30, // 30 天
-    updateAge: 60 * 60 * 24, // 每天最多续期一次
+    expiresIn: 60 * 60 * 24 * 30, // 30 days 30 天
+    updateAge: 60 * 60 * 24, // renew at most once a day 每天最多续期一次
   },
   advanced: {
+    // Frontend and backend sit on different ports (5173 → 8787), so SameSite has to be loosened
+    // explicitly for the cookie to be sent at all.
     // 前后端跨端口（5173 → 8787），cookie 必须显式放宽 SameSite 才能带上
     defaultCookieAttributes: env.isProd
       ? { sameSite: 'lax', secure: true }

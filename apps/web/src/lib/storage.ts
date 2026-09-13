@@ -1,4 +1,10 @@
 /**
+ * Local-first storage.
+ *
+ * localStorage is always the source of truth: without an account, offline, or with the single-file
+ * build copied onto a USB stick, the tool is fully functional. Cloud sync is a backup layer on
+ * top, not a prerequisite for running.
+ *
  * 本地优先存储。
  *
  * localStorage 始终是事实来源：不登录、断网、甚至把单文件构建产物拷到 U 盘打开，
@@ -7,6 +13,8 @@
 
 import { projectionInputSchema, type ProjectionInputDTO } from '@pmp/shared';
 
+// v2: the multi-region rework changed the input shape, so old saves can't pass schema validation.
+// A new key avoids re-parsing them fruitlessly on every startup.
 // v2：多地区改造后输入结构变了，旧存档无法通过 schema 校验，换 key 避免每次启动都白解析一遍
 const KEY = 'pmp.input.v2';
 const THEME_KEY = 'pmp.theme.v1';
@@ -15,6 +23,8 @@ export function loadLocalInput(): ProjectionInputDTO | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
+    // Validate rather than trust: a structure saved by an older version may no longer match the
+    // current schema.
     // 校验而不是直接信任：旧版本存下的结构可能已经和当前 schema 不兼容
     const parsed = projectionInputSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
@@ -27,6 +37,7 @@ export function saveLocalInput(input: ProjectionInputDTO): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(input));
   } catch {
+    // localStorage throws in private mode; degrade silently to "this session only".
     // 隐私模式下 localStorage 会抛异常，静默降级为「本次会话有效」
   }
 }
@@ -43,7 +54,7 @@ export function saveTheme(t: ThemePref): void {
     if (t === 'system') localStorage.removeItem(THEME_KEY);
     else localStorage.setItem(THEME_KEY, t);
   } catch {
-    /* 同上 */
+    /* Same as above. 同上 */
   }
 }
 

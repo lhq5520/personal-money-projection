@@ -4,6 +4,12 @@ import { useI18n } from '../i18n/index.js';
 import type { ValueMode } from './FanChart.js';
 
 /**
+ * A table alternative for reading the charts.
+ *
+ * Both an accessibility requirement and one of the compensations for the aqua series falling short
+ * of 3:1 contrast in light mode: any reader who can't distinguish the colors gets exactly the same
+ * data here.
+ *
  * 图表的表格替代读法。
  *
  * 既是无障碍要求，也是浅色模式下 aqua 系列未达 3:1 对比度所需的补偿手段之一：

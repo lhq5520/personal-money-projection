@@ -2,6 +2,12 @@ import { checkFreshness, getRegion, type RegionCode } from '@pmp/engine';
 import { useI18n, type TranslationKey } from '../i18n/index.js';
 
 /**
+ * The data vintage badge.
+ *
+ * The easiest way for a financial tool to mislead you isn't getting the arithmetic wrong — it's
+ * computing meticulously from two-year-old parameters. So "how fresh is this number" has to be as
+ * prominent as the number itself, not buried in the third paragraph of a disclaimer.
+ *
  * 数据口径徽标。
  *
  * 一个财务工具最容易骗人的地方，不是算错，而是拿两年前的参数算得一丝不苟。
@@ -25,7 +31,8 @@ export function DataBadge({ region, jurisdiction }: { region: RegionCode; jurisd
 
   return (
     <span className={`data-badge ${tone}`} title={detail}>
-      {/* 图标 + 文字，状态不靠颜色单独传达 */}
+      {/* Icon + text, so status is never conveyed by color alone.
+          图标 + 文字，状态不靠颜色单独传达 */}
       <span aria-hidden="true">{f.expired ? '⚠' : p.confidence === 'verified' ? '✓' : '~'}</span>
       <span>
         {t('data.freshness')}: {label}

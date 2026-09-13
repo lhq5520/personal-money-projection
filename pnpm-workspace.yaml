@@ -2,6 +2,8 @@ packages:
   - "packages/*"
   - "apps/*"
 
+# pnpm 10+ blocks dependency install scripts by default; these packages need explicit approval:
+# prisma generates its client, esbuild downloads a platform binary.
 # pnpm 10+ 默认禁止依赖执行安装脚本，这几个包需要显式放行：
 # prisma 要生成客户端，esbuild 要下载平台二进制
 allowBuilds:

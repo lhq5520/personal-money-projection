@@ -1,4 +1,9 @@
 /**
+ * Simplified Chinese strings. This is the **source language** for translation: new copy goes here
+ * first, en.ts derives its type from this file, and a missing translation is a compile error.
+ *
+ * Placeholders are written as {name} and interpolated by t().
+ *
  * 简体中文词条。这是翻译的**源语言**：新增文案先写在这里，
  * en.ts 的类型由本文件推导，漏翻会在编译期报错。
  *

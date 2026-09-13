@@ -16,7 +16,12 @@ interface Props {
   onChange: (next: ProjectionInputDTO) => void;
 }
 
-/** 各国货币量级差异很大，滑杆上限按地区缩放，否则美加用户拖一下就到顶了 */
+/**
+ * Currency magnitudes differ a lot between countries, so slider maxima scale by region —
+ * otherwise a US or Canadian user hits the ceiling on the first drag.
+ *
+ * 各国货币量级差异很大，滑杆上限按地区缩放，否则美加用户拖一下就到顶了
+ */
 const SALARY_MAX: Record<RegionCode, number> = { CN: 200_000, US: 80_000, CA: 80_000 };
 const SPEND_MAX: Record<RegionCode, number> = { CN: 100_000, US: 40_000, CA: 40_000 };
 const CAPITAL_MAX: Record<RegionCode, number> = { CN: 5_000_000, US: 2_000_000, CA: 2_000_000 };
@@ -46,6 +51,17 @@ export function ControlPanel({ input, onChange }: Props) {
     onChange({ ...input, ca: { ...input.ca, ...patch } });
 
   /**
+   * The trade-off when switching countries:
+   *
+   * Currency-denominated fields (salary, spending, principal) and country-convention fields
+   * (salary months, housing fund withdrawal, fund fees, dividend withholding) all reset to the
+   * new region's defaults — otherwise ¥14,600 would become $14,600 verbatim, a 7× difference in
+   * magnitude, and a China-specific convention like "15 salaries a year" is meaningless in the US.
+   *
+   * The "market view" you've tuned (horizon, expected return, volatility, invest ratio) and all
+   * three regions' tax parameters are preserved, because they're either country-agnostic or
+   * stored separately to begin with.
+   *
    * 换国家时的取舍：
    *
    * 以货币计价的字段（薪资、开销、本金）和各国惯例字段（薪数、公积金提取、
@@ -67,6 +83,7 @@ export function ControlPanel({ input, onChange }: Props) {
         annualVolatility: input.investment.annualVolatility,
         investRatio: input.investment.investRatio,
       },
+      // Each region's tax settings are stored independently, so switching loses none of them.
       // 三个地区的税务设置各自独立存放，切换时一份都不丢
       cn: input.cn,
       us: input.us,
@@ -220,6 +237,8 @@ export function ControlPanel({ input, onChange }: Props) {
               onChange={(v) => setPlan({ investWithdrawal: v })} />
           </>
         ) : (
+          // The 401(k) / RRSP contribution rate is set in each region's own tax section; this
+          // only describes the account's behavior.
           // 401(k) / RRSP 的缴纳比例在各自的税务分区里设置，这里只说明账户行为
           <p className="hint" style={{ marginTop: 0 }}>{t('ctl.plan.marketNote', { plan: planName })}</p>
         )}

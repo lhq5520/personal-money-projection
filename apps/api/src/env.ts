@@ -1,4 +1,9 @@
 /**
+ * Centralized reading and validation of environment variables.
+ *
+ * Better to crash at process start over missing configuration than to return a 500 the moment a
+ * user clicks "sign in".
+ *
  * 环境变量集中读取与校验。
  *
  * 宁可在进程启动时因为缺少配置而立刻崩溃，也不要等到用户点了登录按钮才 500。

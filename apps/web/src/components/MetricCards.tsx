@@ -17,6 +17,8 @@ export function MetricCards({ result, mc, mode }: Props) {
   const deflator = Math.pow(1 + input.inflation.annualRate, years);
   const adjust = (v: number) => (mode === 'real' ? v / deflator : v);
 
+  // mc.terminal holds nominal percentiles; discounting to today's purchasing power happens here,
+  // in one place.
   // mc.terminal 是名义口径的分位数，实际购买力口径统一在这里折现
   const median = mc ? adjust(mc.terminal.p50) : adjust(summary.finalValue);
   const p10 = mc ? adjust(mc.terminal.p10) : median;

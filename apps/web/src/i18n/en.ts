@@ -1,6 +1,11 @@
 import type { Dict } from './zh.js';
 
-/** 英文词条。类型绑定到 zh.ts 推导出的 Dict，漏翻任何一条都会在编译期报错。 */
+/**
+ * English strings. The type is bound to the Dict inferred from zh.ts, so missing any entry is a
+ * compile error.
+ *
+ * 英文词条。类型绑定到 zh.ts 推导出的 Dict，漏翻任何一条都会在编译期报错。
+ */
 export const en: Dict = {
   'app.title': 'Personal Money Projection',
   'app.subtitle':

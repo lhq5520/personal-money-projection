@@ -1,4 +1,9 @@
-/** 方案 CRUD 的 fetch 封装。所有请求都带 cookie，401 时向上抛出便于回落到本地模式。 */
+/**
+ * A fetch wrapper for scenario CRUD. Every request carries cookies, and a 401 is rethrown so the
+ * caller can fall back to local-only mode.
+ *
+ * 方案 CRUD 的 fetch 封装。所有请求都带 cookie，401 时向上抛出便于回落到本地模式。
+ */
 
 import type { ProjectionInputDTO, ScenarioDTO } from '@pmp/shared';
 import { API_URL } from './auth-client.js';

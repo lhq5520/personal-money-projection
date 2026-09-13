@@ -1,4 +1,10 @@
 /**
+ * The input contract shared by frontend and backend.
+ *
+ * One Zod schema serves all three: frontend form validation, API input validation, and parsing
+ * shared URL parameters. Define once, benefit in three places, and eliminate mismatches like
+ * "the frontend accepts it but the backend rejects it".
+ *
  * 前后端共用的输入契约。
  *
  * 同一份 Zod schema 同时用于：前端表单校验、API 入参校验、URL 分享参数解析。
@@ -14,7 +20,7 @@ export const REGION_CODES = ['CN', 'US', 'CA'] as const;
 export const regionCodeSchema = z.enum(REGION_CODES);
 export type RegionCodeDTO = z.infer<typeof regionCodeSchema>;
 
-/* ------------------------------------------------------------ 地区特有 */
+/* ---------------------------------------- Region-specific 地区特有 */
 
 export const cnSpecialDeductionsSchema = z.object({
   childrenCount: z.number().int().min(0).max(10),
@@ -53,7 +59,7 @@ export const caParamsSchema = z.object({
   otherCreditBase: money,
 });
 
-/* ------------------------------------------------------------ 通用 */
+/* -------------------------------------------------- Generic 通用 */
 
 export const salaryStepSchema = z.object({
   atYear: z.number().int().min(1).max(60),
@@ -109,7 +115,10 @@ export const overridesSchema = z
 export const projectionInputSchema = z
   .object({
     region: regionCodeSchema,
-    /** 城市（中国）/ 州（美国）/ 省（加拿大）的 code */
+    /**
+     * Code of the city (China) / state (US) / province (Canada).
+     * 城市（中国）/ 州（美国）/ 省（加拿大）的 code
+     */
     jurisdiction: z.string().min(1).max(40),
     income: incomeSchema,
     expense: expenseSchema,
@@ -117,6 +126,7 @@ export const projectionInputSchema = z
     investment: investmentSchema,
     inflation: inflationSchema,
     overrides: overridesSchema,
+    // All three regions' parameters are kept at once, so switching countries loses no settings.
     // 三个地区的参数同时保留，切换国家时不丢设置
     cn: cnParamsSchema,
     us: usParamsSchema,
@@ -143,7 +153,7 @@ export const projectionInputSchema = z
 
 export type ProjectionInputDTO = z.infer<typeof projectionInputSchema>;
 
-/* ------------------------------------------------------- 方案的增删改查 */
+/* ------------------------------------------ Scenario CRUD 方案的增删改查 */
 
 export const scenarioCreateSchema = z.object({
   name: z.string().min(1).max(80),
@@ -152,7 +162,12 @@ export const scenarioCreateSchema = z.object({
 });
 
 export const scenarioUpdateSchema = scenarioCreateSchema.partial().extend({
-  /** 乐观并发：客户端回传上次读到的更新时间，服务端据此检测冲突 */
+  /**
+   * Optimistic concurrency: the client echoes back the updatedAt it last read, and the server
+   * uses it to detect conflicts.
+   *
+   * 乐观并发：客户端回传上次读到的更新时间，服务端据此检测冲突
+   */
   expectedUpdatedAt: z.string().datetime().optional(),
 });
 

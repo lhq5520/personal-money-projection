@@ -16,6 +16,9 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Prisma Client is a generated artifact and isn't committed; without generating it the
+      # apps/api typecheck is guaranteed to fail. `generate` only reads the schema and never
+      # connects, so a placeholder URL is enough to satisfy the datasource's env() lookup.
       # Prisma Client 是生成产物、不进仓库，不生成的话 apps/api 的类型检查必然失败。
       # generate 只读 schema 不连库，占位 URL 足够满足 datasource 的 env() 求值。
       - name: 生成 Prisma Client
@@ -25,6 +28,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --filter @pmp/web build
+      # Warn but don't block on PRs: stale data is a maintenance-cadence problem and shouldn't
+      # stand in the way of unrelated code changes. The real gate is the audit job in
+      # data-sync.yml, which runs weekly and opens an issue on expiry.
       # PR 上只警告不阻断：数据过期是维护节奏问题，不该挡住无关的代码改动。
       # 真正的门禁在 data-sync.yml 的 audit job（每周跑，过期就开 issue）。
       - name: 数据时效（仅警告）

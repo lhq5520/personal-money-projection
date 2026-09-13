@@ -10,6 +10,12 @@ interface Props {
 }
 
 /**
+ * The cloud sync panel.
+ *
+ * Local-first: the whole app is fully functional while signed out, and this panel is only an
+ * optional backup layer. If the backend is unreachable it degrades to "offline" and never blocks
+ * the main flow.
+ *
  * 云端同步面板。
  *
  * 本地优先：未登录时整个应用功能完整，这个面板只是可选的备份层。
@@ -73,6 +79,8 @@ export function SyncPanel({ input, onLoad }: Props) {
       }
       await refresh();
     } catch (e) {
+      // On conflict, surface the server's latest version and let the user decide which to keep,
+      // rather than silently overwriting.
       // 冲突时把服务端最新版本摆出来，让用户自己决定保留哪份，而不是静默覆盖
       const text =
         e instanceof ApiError && e.isConflict

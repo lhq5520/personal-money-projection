@@ -1,4 +1,10 @@
 /**
+ * Scenario CRUD.
+ *
+ * Authorization model: there is no database-level RLS, so every query must carry a userId
+ * condition. To make omissions impossible, every prisma.scenario call in this file builds its
+ * where clause through `owned()`.
+ *
  * 方案的增删改查。
  *
  * 授权模型：没有数据库级 RLS，所有查询都必须带上 userId 条件。
@@ -14,10 +20,16 @@ import type { AppEnv } from '../types.js';
 
 const scenarios = new Hono<AppEnv>();
 
+// The whole router requires sign-in, so a new sub-route can't miss authentication.
 // 整个路由器都要求登录，新增子路由不会漏掉鉴权
 scenarios.use('*', requireAuth);
 
-/** 所有权条件的唯一来源——任何按 id 定位方案的查询都必须经过它 */
+/**
+ * The single source of the ownership condition — every query that locates a scenario by id must
+ * go through it.
+ *
+ * 所有权条件的唯一来源——任何按 id 定位方案的查询都必须经过它
+ */
 const owned = (userId: string, id?: string) => (id ? { id, userId } : { userId });
 
 const include = { salarySteps: true } as const;
@@ -80,6 +92,8 @@ scenarios.put('/:id', async (c) => {
   const existing = await prisma.scenario.findFirst({ where: owned(user.id, id) });
   if (!existing) return c.json({ error: '方案不存在或无权访问' }, 404);
 
+  // Optimistic concurrency: if another device changed this scenario during the edit, hand the
+  // decision of which version to keep back to the client rather than silently clobbering theirs.
   // 乐观并发：另一台设备在本次编辑期间改过同一方案时，交还给客户端决定保留哪一份，
   // 而不是静默覆盖掉对方的修改。
   if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) {
@@ -95,6 +109,9 @@ scenarios.put('/:id', async (c) => {
     if (duplicate) return c.json({ error: `已存在同名方案「${name}」` }, 409);
   }
 
+  // salarySteps lives in its own table; replacing it wholesale is simpler and less error-prone
+  // than diffing row by row, and wrapping it in a transaction rules out the intermediate state
+  // where the old rows are deleted but the new ones never land.
   // salarySteps 是独立的表，整体替换比逐条 diff 更简单也更不容易出错，
   // 放在事务里保证不会出现「删掉了旧的、新的没写进去」的中间态。
   const row = await prisma.$transaction(async (tx) => {

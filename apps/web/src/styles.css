@@ -1,4 +1,11 @@
 /**
+ * Colors come from the project's visualization guidelines, with each mode picking its own ramp
+ * rather than auto-inverting the light one.
+ * The categorical palette is checked by validate_palette.js: adjacent pairs score CVD ΔE 9.2 / 9.4
+ * in light/dark and ΔE 27.6 / 26.5 for normal vision, both above threshold.
+ * In light mode aqua contrasts 2.74 against the light background, below 3:1, so every mark using
+ * aqua carries a visible direct label and a table view is provided as an alternative reading.
+ *
  * 配色取自项目的可视化规范，两种模式各自选定色阶（不是把浅色自动反相）。
  * 分类色板经 validate_palette.js 校验：浅色/深色下相邻对 CVD ΔE 9.2 / 9.4，
  * 常规视觉 ΔE 27.6 / 26.5，均高于门槛。
@@ -17,9 +24,9 @@
   --axis: #c3c2b7;
   --border: rgba(11, 11, 11, 0.1);
 
-  --series-1: #2a78d6; /* 账户价值 */
-  --series-2: #eb6834; /* 累计投入本金 */
-  --series-3: #1baf7a; /* 结果条 */
+  --series-1: #2a78d6; /* account value 账户价值 */
+  --series-2: #eb6834; /* cumulative principal 累计投入本金 */
+  --series-3: #1baf7a; /* result bar 结果条 */
 
   --status-good: #0ca30c;
   --status-warning: #fab219;
@@ -92,7 +99,7 @@ h3 { margin: 0 0 10px; font-size: 14px; color: var(--text-secondary); font-weigh
 
 .controls { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
 
-/* ---- 表单 ---- */
+/* ---- Forms 表单 ---- */
 .group { border: 0; margin: 0 0 18px; padding: 0; }
 .group > legend { font-size: 13px; font-weight: 600; color: var(--text-secondary); padding: 0 0 8px; }
 
@@ -129,7 +136,7 @@ select, .text-input {
 .checkbox { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
 .checkbox input { accent-color: var(--series-1); }
 
-/* ---- 指标卡 ---- */
+/* ---- Metric cards 指标卡 ---- */
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
 .metric {
   background: var(--surface-1);
@@ -141,7 +148,7 @@ select, .text-input {
 .metric .v { font-size: 23px; font-weight: 700; margin-top: 6px; letter-spacing: -0.025em; color: var(--text-primary); }
 .metric .sub { font-size: 11.5px; color: var(--text-muted); margin: 3px 0 0; }
 
-/* ---- 图表 ---- */
+/* ---- Charts 图表 ---- */
 .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--text-secondary); font-size: 12px; align-items: center; }
 .legend .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
@@ -168,7 +175,7 @@ select, .text-input {
 
 .chart-wrap { position: relative; }
 
-/* ---- 表格视图 ---- */
+/* ---- Table view 表格视图 ---- */
 .table-wrap { max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
 table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 th, td { padding: 6px 10px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -176,7 +183,7 @@ th:first-child, td:first-child { text-align: left; }
 thead th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600; border-bottom: 1px solid var(--border); }
 tbody tr:nth-child(even) { background: color-mix(in srgb, var(--text-primary) 3%, transparent); }
 
-/* ---- 按钮 ---- */
+/* ---- Buttons 按钮 ---- */
 button {
   font: 500 13px var(--font);
   color: var(--text-primary);
@@ -200,7 +207,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .toggle-group button { border: 0; border-radius: 0; }
 .toggle-group button + button { border-left: 1px solid var(--border); }
 
-/* ---- 提示与说明 ---- */
+/* ---- Hints & notes 提示与说明 ---- */
 .warnings { display: grid; gap: 8px; margin: 16px 0; }
 .warn {
   display: flex; gap: 9px; align-items: flex-start;
@@ -247,7 +254,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .metric .v { font-size: 19px; }
 }
 
-/* ---- 数据口径徽标 ---- */
+/* ---- Data vintage badge 数据口径徽标 ---- */
 .data-badge {
   display: inline-flex;
   align-items: center;
@@ -262,7 +269,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .data-badge a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
 .data-badge a:hover { color: var(--text-primary); }
-/* 状态色只是强化，语义由图标和文字承担 */
+/* Status color only reinforces; the icon and text carry the meaning. 状态色只是强化，语义由图标和文字承担 */
 .data-badge.good { border-color: color-mix(in srgb, var(--status-good) 45%, transparent); }
 .data-badge.warn { border-color: color-mix(in srgb, var(--status-warning) 55%, transparent); }
 .data-badge.bad { border-color: color-mix(in srgb, var(--status-critical) 45%, transparent); }

@@ -1,6 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
 /**
+ * The Prisma client singleton.
+ *
+ * tsx watch re-evaluates modules on every hot reload, so without pinning this to globalThis
+ * development would accumulate connections and exhaust Postgres' connection limit quickly.
+ *
  * Prisma 客户端单例。
  *
  * tsx watch 每次热重载都会重新求值模块，若不挂到 globalThis 上，

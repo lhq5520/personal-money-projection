@@ -9,14 +9,28 @@ interface SliderProps {
   max: number;
   step: number;
   hint?: string;
-  /** 数字输入框展示用的单位后缀，例如 % 或 年 */
+  /**
+   * Unit suffix shown in the number input, e.g. % or years.
+   * 数字输入框展示用的单位后缀，例如 % 或 年
+   */
   suffix?: string;
-  /** 内部值与展示值的换算倍数（比率字段传 100，让用户看到 7 而不是 0.07） */
+  /**
+   * Multiplier between the internal value and the displayed one — rate fields pass 100 so the user
+   * sees 7 rather than 0.07.
+   *
+   * 内部值与展示值的换算倍数（比率字段传 100，让用户看到 7 而不是 0.07）
+   */
   scale?: number;
   decimals?: number;
 }
 
 /**
+ * A slider paired with a number input.
+ *
+ * The prototype page had only a slider, and `step=100` meant a real salary like 14,650 simply
+ * couldn't be entered. Here both coexist: the slider to get a feel for the range, the input to
+ * enter the exact value.
+ *
  * 滑杆 + 数字输入框的组合。
  *
  * 原型页面只有滑杆，`step=100` 意味着你根本填不进 14650 这种真实工资数。
@@ -28,6 +42,8 @@ export function SliderField({
   const id = useId();
   const { t } = useI18n();
   const display = value * scale;
+  // Keep the user's raw text while they type, or the "1" on the way to "14600" would be clamped
+  // to min mid-entry.
   // 输入过程中保留用户的原始文本，否则「1」在输入「14600」的途中就会被夹到 min
   const [draft, setDraft] = useState<string | null>(null);
 

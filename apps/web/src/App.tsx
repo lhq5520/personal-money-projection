@@ -16,7 +16,10 @@ import { SyncPanel } from './components/SyncPanel.js';
 import { Disclaimer } from './components/Disclaimer.js';
 import { DataBadge } from './components/DataBadge.js';
 
-/** 启动时的参数优先级：分享链接 > 本地存档 > 默认值 */
+/**
+ * Startup parameter precedence: share link > local save > defaults.
+ * 启动时的参数优先级：分享链接 > 本地存档 > 默认值
+ */
 function initialInput(): ProjectionInputDTO {
   return readInputFromUrl(window.location.search) ?? loadLocalInput() ?? (defaultInput('CN') as ProjectionInputDTO);
 }
@@ -43,6 +46,7 @@ export function App() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } catch {
+      // If the clipboard is denied, fall back to the address bar so the user can still copy it.
       // 剪贴板被拒时退回地址栏，用户仍能手动复制
       window.history.replaceState(null, '', url);
     }
@@ -58,6 +62,7 @@ export function App() {
       { label: t('waterfall.tax'), value: -y1.taxAnnual / 12, kind: 'decrease' },
       { label: t('waterfall.net'), value: y1.avgMonthlyNet, kind: 'total' },
     ];
+    // Only take a slot when it actually exists, so the chart isn't littered with zero-height bars.
     // 只在实际存在时才占一格，避免图上出现一堆高度为 0 的柱子
     if (m1.taxFreeAllowance > 0) {
       steps.push({ label: t('waterfall.allowance'), value: m1.taxFreeAllowance, kind: 'increase' });

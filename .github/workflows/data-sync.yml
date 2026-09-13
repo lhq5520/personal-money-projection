@@ -1,5 +1,9 @@
 name: 税率数据同步与时效审计
 
+# Mondays at 06:00 UTC. Rate changes are annual events, but their triggers are scattered across
+# the year: the US IRS inflation adjustments (autumn), Canadian provisions taking effect mid-year,
+# and China's social insurance year rolling over in July.
+# A weekly check catches a change within days without hammering upstream's public-good API.
 # 每周一 06:00 UTC。税率变更是年度事件，但触发点分散在全年：
 # 美国 IRS 的通胀调整（秋季）、加拿大年中生效的条款、中国 7 月的社保年度切换。
 # 每周检查一次足以在变更后几天内发现，又不会打扰上游的公益 API。
@@ -24,16 +28,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # ---- 能自动的部分：拉上游 ----
+      # ---- What can be automated: pull from upstream 能自动的部分：拉上游 ----
       - name: 同步美加可自动化的参数
         run: pnpm --filter @pmp/engine data:sync -- --write --year $(date -u +%Y)
 
-      # ---- 不能自动的部分：变更检测，仅作参考 ----
+      # ---- What can't: change detection, advisory only 不能自动的部分：变更检测，仅作参考 ----
       - name: 无上游数据源的变更检测
         continue-on-error: true
         run: pnpm --filter @pmp/engine data:check -- --snapshot
 
-      # ---- 交叉验证：抓「算法用错了」而不只是「数字抄错了」----
+      # ---- Cross-check: catches "the algorithm is wrong", not just "the number was copied wrong"
+      #      交叉验证：抓「算法用错了」而不只是「数字抄错了」----
       - name: 差分验证（本引擎 vs PolicyEngine 实时 API）
         continue-on-error: true
         run: pnpm --filter @pmp/engine data:verify
@@ -56,8 +61,12 @@ jobs:
             - [ ] 差分验证的超差项都能解释（建模范围差异 vs 真的算错）
           labels: data
 
-  # ---- 时效审计：这才是「保证不会静默用旧数据」的门禁 ----
+  # ---- The freshness audit: this is the gate that guarantees stale data is never used silently
+  #      时效审计：这才是「保证不会静默用旧数据」的门禁 ----
   #
+  # Everything syncable has been synced; the rest (all of China, Canada's CPP/EI and provincial
+  # data, two US states) has no automatable source at all. "Always current" is out of reach, but
+  # "expiry is always detected" is not.
   # 能同步的已经同步了；剩下的（中国全部、加拿大 CPP/EI 与省级、美国两个州）
   # 没有任何可自动化的源。做不到「一直最新」，但做得到「过期一定被发现」。
   audit:

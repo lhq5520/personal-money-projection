@@ -13,13 +13,16 @@ export const LANGS: { code: Lang; label: string }[] = [
   { code: 'en', label: 'English' },
 ];
 
-/** 首次访问时按浏览器语言猜一个，之后以用户的显式选择为准 */
+/**
+ * Guess from the browser language on first visit; after that the user's explicit choice wins.
+ * 首次访问时按浏览器语言猜一个，之后以用户的显式选择为准
+ */
 function detectLang(): Lang {
   try {
     const stored = localStorage.getItem(LANG_KEY);
     if (stored === 'zh' || stored === 'en') return stored;
   } catch {
-    /* 隐私模式下读不到，走下面的浏览器探测 */
+    /* Unreadable in private mode; fall through to browser detection below. 隐私模式下读不到，走下面的浏览器探测 */
   }
   return navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en';
 }
@@ -30,7 +33,10 @@ export interface I18nValue {
   lang: Lang;
   setLang: (l: Lang) => void;
   t: Translate;
-  /** 取引擎给出的双语名称中当前语言的那一个 */
+  /**
+   * Pick the current language's side of a bilingual name supplied by the engine.
+   * 取引擎给出的双语名称中当前语言的那一个
+   */
   name: (n: LocalizedName) => string;
 }
 
@@ -44,7 +50,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(LANG_KEY, lang);
     } catch {
-      /* 隐私模式下存不了，仅本次会话有效 */
+      /* Can't persist in private mode; this session only. 隐私模式下存不了，仅本次会话有效 */
     }
   }, [lang]);
 
@@ -71,7 +77,12 @@ export function useI18n(): I18nValue {
   return ctx;
 }
 
-/** 税额明细的层级名称随国家而变（联邦/州 vs 综合所得），这里集中解析 */
+/**
+ * Tax breakdown layer names vary by country (federal/state vs. comprehensive income); resolve them
+ * in one place here.
+ *
+ * 税额明细的层级名称随国家而变（联邦/州 vs 综合所得），这里集中解析
+ */
 export function taxLayerKey(code: string, region: RegionModule['code']): TranslationKey {
   switch (code) {
     case 'national':

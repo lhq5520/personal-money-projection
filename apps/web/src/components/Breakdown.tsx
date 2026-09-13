@@ -30,7 +30,9 @@ export function Breakdown({ result }: { result: ProjectionResult }) {
           <Line k={t('breakdown.gross')} v={fmt.money(y1.grossAnnual)} />
           {y1.bonus > 0 && <Line k={t('breakdown.bonus')} v={fmt.money(y1.bonus)} />}
 
-          {/* 强制缴款逐项列出：中国是养老/医疗/失业，美国是 FICA 各项，加拿大是 CPP/EI */}
+          {/* Mandatory contributions itemized: pension/medical/unemployment in China, the FICA
+              components in the US, CPP/EI in Canada.
+              强制缴款逐项列出：中国是养老/医疗/失业，美国是 FICA 各项，加拿大是 CPP/EI */}
           {y1.socialBreakdown.map((b) => (
             <Line key={b.code} k={t(`contrib.${b.code}` as TranslationKey)} v={fmt.money(b.amount)} />
           ))}
@@ -39,7 +41,8 @@ export function Breakdown({ result }: { result: ProjectionResult }) {
           <Line k={t('breakdown.deduction')} v={fmt.money(y1.deductionAnnual)} />
           <Line k={t('breakdown.taxable')} v={fmt.money(y1.taxableAnnual)} />
 
-          {/* 所得税分层列出：联邦 / 州省 / 地方 / 附加税 / 抵免 */}
+          {/* Income tax by layer: federal / state-province / local / surtax / credits.
+              所得税分层列出：联邦 / 州省 / 地方 / 附加税 / 抵免 */}
           {y1.taxBreakdown.map((c) => (
             <Line
               key={c.code}

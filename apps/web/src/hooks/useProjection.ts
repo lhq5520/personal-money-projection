@@ -12,6 +12,10 @@ import {
 import type { ProjectionInputDTO } from '@pmp/shared';
 
 /**
+ * The deterministic result is computed synchronously — it takes milliseconds, and dragging a
+ * slider has to feel immediate. The Monte Carlo is debounced first: 2,000 paths × 240 months runs
+ * in a few tens of milliseconds, which shouldn't be allowed to stall the drag.
+ *
  * 确定性结果同步算（毫秒级，拖滑杆要跟手），
  * 蒙特卡洛防抖后再算（2000 条路径 × 240 个月，约几十毫秒，不该卡住拖动）。
  */

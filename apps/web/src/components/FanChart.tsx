@@ -19,6 +19,14 @@ const PAD = { l: 62, r: 92, t: 16, b: 30 };
 const HEIGHT = 340;
 
 /**
+ * The percentile fan chart.
+ *
+ * Replaces the prototype page's single deterministic curve: a range is the honest answer to this
+ * question. The two solid lines are two distinct entities (account value / principal contributed)
+ * and therefore get two categorical color slots. The fan band is not a third entity but the
+ * uncertainty of "account value" itself, so it shares the median line's color and only drops in
+ * opacity.
+ *
  * 分位数扇形图。
  *
  * 取代原型页面的单条确定性曲线：区间才是这个问题的诚实答案。
@@ -57,6 +65,8 @@ export function FanChart({ timeline, mc, mode, inflationRate, region }: Props) {
         lo25.push(p.p25);
         hi75.push(p.p75);
       } else {
+        // While the Monte Carlo is still running, stand in with the deterministic path so the
+        // chart doesn't flicker.
         // 蒙特卡洛尚未算完时先用确定性路径占位，避免图表闪烁
         const v = discount(timeline[y]?.value ?? 0, y);
         median.push(v); lo10.push(v); hi90.push(v); lo25.push(v); hi75.push(v);
@@ -65,6 +75,8 @@ export function FanChart({ timeline, mc, mode, inflationRate, region }: Props) {
     return { contribution, median, lo10, hi90, lo25, hi75 };
   }, [timeline, mc, mode, inflationRate, years]);
 
+  // Compute the ticks first, then align the top of the range to the last tick — that way the axis
+  // never ends on a half-finished number.
   // 刻度先算好，再把量程顶端对齐到最后一个刻度，轴上就不会出现半截数字
   const ticks = niceTicks(Math.max(1, ...series.hi90, ...series.contribution));
   const maxY = ticks[ticks.length - 1]!;
@@ -114,7 +126,8 @@ export function FanChart({ timeline, mc, mode, inflationRate, region }: Props) {
         <path d={line(series.contribution)} fill="none" stroke="var(--series-2)" strokeWidth={2} strokeLinejoin="round" />
         <path d={line(series.median)} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeLinejoin="round" />
 
-        {/* 直接标注末端，读者不必在图例和曲线之间来回找 */}
+        {/* Label the end of each line directly, so the reader isn't bouncing between legend and
+            curve. 直接标注末端，读者不必在图例和曲线之间来回找 */}
         <text x={x(years) + 7} y={yScale(series.median[years]!) + 4} fontSize={11.5} fill="var(--text-secondary)">
           {t('chart.series.value')}
         </text>
@@ -132,7 +145,8 @@ export function FanChart({ timeline, mc, mode, inflationRate, region }: Props) {
         {hover !== null && (
           <g>
             <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={PAD.t + innerH} stroke="var(--axis)" strokeWidth={1} />
-            {/* 2px 同背景色描边，让标记点从下方的曲线和色带里分离出来 */}
+            {/* A 2px stroke in the background color separates the marker from the curve and band
+                beneath it. 2px 同背景色描边，让标记点从下方的曲线和色带里分离出来 */}
             <circle cx={x(hover)} cy={yScale(series.median[hover]!)} r={5} fill="var(--series-1)" stroke="var(--surface-1)" strokeWidth={2} />
             <circle cx={x(hover)} cy={yScale(series.contribution[hover]!)} r={5} fill="var(--series-2)" stroke="var(--surface-1)" strokeWidth={2} />
           </g>

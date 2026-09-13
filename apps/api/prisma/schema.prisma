@@ -1,3 +1,9 @@
+// Personal Money Projection — the data model
+//
+// Amounts are always Decimal, never Float: across 480 monthly compounding iterations over 40
+// years, accumulated binary floating-point error grows large enough to see with the naked eye.
+// Rates use Decimal(8,6), precise to one part per million.
+//
 // Personal Money Projection —— 数据模型
 //
 // 金额一律用 Decimal 而非 Float：40 年 480 次月度复利迭代下，
@@ -13,7 +19,7 @@ datasource db {
 }
 
 /**
- * ------------------------------------------------- Better Auth 所需的表
+ * ------------------------ Tables required by Better Auth Better Auth 所需的表
  */
 
 model User {
@@ -58,6 +64,7 @@ model Account {
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
   scope                 String?
+  /// Holds the password hash Better Auth generates for email/password sign-in. Never plaintext.
   /// 邮箱密码登录时存放 Better Auth 生成的密码哈希，绝不存明文
   password              String?
   createdAt             DateTime  @default(now())
@@ -83,9 +90,16 @@ model Verification {
 }
 
 /**
- * ------------------------------------------------------------ 业务模型
+ * ----------------------------------------------- Domain model 业务模型
  */
 
+/// One complete set of financial assumptions. Stored as relational plaintext rather than an
+/// encrypted blob, which buys a server that can query, aggregate, and compare across scenarios.
+///
+/// All three regions' parameters are persisted together: switching countries doesn't discard
+/// settings already filled in for another, matching the frontend's behavior. The columns that
+/// don't match the current region simply sit out of the calculation for now.
+///
 /// 一套完整的财务假设。选择关系化明文存储（而非加密 blob），
 /// 换来的是服务端可查询、可聚合、可跨方案对比的能力。
 ///
@@ -100,27 +114,32 @@ model Scenario {
 
   /// CN | US | CA
   region       String @default("CN")
+  /// Code of the city (China) / state (US) / province (Canada).
   /// 城市（中国）/ 州（美国）/ 省（加拿大）的 code
   jurisdiction String @default("shanghai")
 
-  // ---- 收入（与国别无关）----
+  // ---- Income, country-agnostic 收入（与国别无关）----
   monthlySalary    Decimal @db.Decimal(16, 2)
+  /// Monthly salaries per year. Decimal because non-integers like 13.5 are allowed; anything
+  /// beyond 12 is treated as a lump-sum bonus.
   /// 全年薪数，允许 13.5 这类非整数，故用 Decimal。超出 12 的部分视作一次性奖金
   salaryMonths     Decimal @db.Decimal(5, 2)
+  /// Monthly tax-free allowance, e.g. China's meal subsidy.
   /// 每月免税补贴（中国的餐补等）
   taxFreeAllowance Decimal @db.Decimal(16, 2)
   salaryGrowthRate Decimal @db.Decimal(8, 6)
 
-  // ---- 支出 ----
+  // ---- Spending 支出 ----
   monthlySpend    Decimal @db.Decimal(16, 2)
   spendGrowthRate Decimal @db.Decimal(8, 6)
 
-  // ---- 雇主储蓄计划（公积金 / 401(k) / RRSP 的通用部分）----
+  // ---- Employer savings plan, the part common to housing fund / 401(k) / RRSP
+  //      雇主储蓄计划（公积金 / 401(k) / RRSP 的通用部分）----
   planMonthlyWithdrawal  Decimal @db.Decimal(16, 2)
   planAnnualInterestRate Decimal @db.Decimal(8, 6)
   planInvestWithdrawal   Boolean @default(true)
 
-  // ---- 投资 ----
+  // ---- Investing 投资 ----
   initialCapital         Decimal @db.Decimal(16, 2)
   years                  Int
   expectedAnnualReturn   Decimal @db.Decimal(8, 6)
@@ -130,33 +149,34 @@ model Scenario {
   dividendWithholdingTax Decimal @db.Decimal(8, 6)
   investRatio            Decimal @db.Decimal(8, 6)
 
-  // ---- 通胀 ----
+  // ---- Inflation 通胀 ----
   inflationRate Decimal @db.Decimal(8, 6)
 
-  // ---- 中国：年终奖计税 + 专项附加扣除 ----
+  // ---- China: bonus taxation + special additional deductions 中国：年终奖计税 + 专项附加扣除 ----
   cnAllowSeparateBonusTax Boolean  @default(true)
   cnChildrenCount         Int      @default(0)
   cnInfantCount           Int      @default(0)
   cnContinuingEducation   String   @default("none") // none | degree | vocational
-  cnHousingType           String   @default("none") // none | loan | rent（互斥）
+  cnHousingType           String   @default("none") // none | loan | rent, mutually exclusive 互斥
   cnRentTier              String? // tier1 | tier2 | tier3
   cnElderlyCare           String   @default("none") // none | only-child | shared
   cnElderlyShareAmount    Decimal? @db.Decimal(16, 2)
 
-  // ---- 美国：申报身份 + 401(k) ----
+  // ---- United States: filing status + 401(k) 美国：申报身份 + 401(k) ----
   usFilingStatus         String  @default("single")
   usQualifyingChildren   Int     @default(0)
   usItemizedDeduction    Decimal @default(0) @db.Decimal(16, 2)
   usPretaxRetirementRate Decimal @default(0.06) @db.Decimal(8, 6)
   usEmployerMatchRate    Decimal @default(0.04) @db.Decimal(8, 6)
 
-  // ---- 加拿大：申报身份 + RRSP ----
+  // ---- Canada: filing status + RRSP 加拿大：申报身份 + RRSP ----
   caFilingStatus      String  @default("single")
   caRrspRate          Decimal @default(0.06) @db.Decimal(8, 6)
   caEmployerMatchRate Decimal @default(0.03) @db.Decimal(8, 6)
   caOtherCreditBase   Decimal @default(0) @db.Decimal(16, 2)
 
-  // ---- 缴费参数覆盖（工资条与默认值对不上时使用，全部可空）----
+  // ---- Contribution overrides, for when a payslip disagrees with the defaults; all nullable
+  //      缴费参数覆盖（工资条与默认值对不上时使用，全部可空）----
   ovSocialBaseMin    Decimal? @db.Decimal(16, 2)
   ovSocialBaseMax    Decimal? @db.Decimal(16, 2)
   ovSocialRateSelf   Decimal? @db.Decimal(8, 6)
@@ -170,6 +190,7 @@ model Scenario {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Scenario names are unique per user, so you can't end up with two "baseline" scenarios.
   /// 同一用户下方案名唯一，避免存出两个「基准方案」
   @@unique([userId, name])
   @@index([userId, updatedAt])
@@ -177,12 +198,15 @@ model Scenario {
   @@map("scenario")
 }
 
+/// A salary step change from a promotion or job switch. The only genuine one-to-many relation in
+/// the model.
 /// 升职/跳槽造成的薪资跳变。这是模型里唯一真正的一对多关系。
 model SalaryStep {
   id         String   @id @default(cuid())
   scenarioId String
   scenario   Scenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
 
+  /// 1-based year index; takes effect at the start of that year.
   /// 1-based 年序，从该年年初起生效
   atYear           Int
   newMonthlySalary Decimal @db.Decimal(16, 2)

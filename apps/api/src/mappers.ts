@@ -1,4 +1,13 @@
 /**
+ * Bidirectional mapping between Prisma rows and ProjectionInputDTO.
+ *
+ * Amounts are stored as Decimal in the database (to avoid floating-point error) while the engine
+ * works in number. The boundary conversion is concentrated in this one file so business code on
+ * neither side has to think about Decimal.
+ *
+ * All three regions' parameters are read and written together: switching countries loses no
+ * settings, matching the frontend's behavior.
+ *
  * Prisma 行 ↔ ProjectionInputDTO 的双向映射。
  *
  * 数据库里金额存 Decimal（避免浮点误差），引擎侧算的是 number，
@@ -10,7 +19,10 @@
 import type { Prisma, SalaryStep, Scenario } from '@prisma/client';
 import type { ProjectionInputDTO, ScenarioDTO } from '@pmp/shared';
 
-/** Prisma 的 Decimal 与 decimal.js 实例都满足这个形状 */
+/**
+ * Both Prisma's Decimal and decimal.js instances satisfy this shape.
+ * Prisma 的 Decimal 与 decimal.js 实例都满足这个形状
+ */
 type DecimalLike = { toNumber(): number };
 
 const num = (d: DecimalLike): number => d.toNumber();
@@ -18,7 +30,12 @@ const numOrUndef = (d: DecimalLike | null): number | undefined => (d === null ? 
 
 type ScenarioRow = Scenario & { salarySteps: SalaryStep[] };
 
-/** 只有当至少一个覆盖项非空时才返回对象，否则返回 undefined，避免产生空的 overrides */
+/**
+ * Return an object only when at least one override is non-empty, otherwise undefined — this
+ * avoids producing an empty `overrides`.
+ *
+ * 只有当至少一个覆盖项非空时才返回对象，否则返回 undefined，避免产生空的 overrides
+ */
 function readOverrides(row: ScenarioRow): ProjectionInputDTO['overrides'] {
   const o = {
     socialBaseMin: numOrUndef(row.ovSocialBaseMin),
@@ -106,7 +123,12 @@ export function rowToDTO(row: ScenarioRow): ScenarioDTO {
   };
 }
 
-/** 把 DTO 摊平成 Prisma 的标量字段。salarySteps 由调用方单独处理（它是独立的表）。 */
+/**
+ * Flatten a DTO into Prisma's scalar fields. salarySteps is handled separately by the caller,
+ * since it lives in its own table.
+ *
+ * 把 DTO 摊平成 Prisma 的标量字段。salarySteps 由调用方单独处理（它是独立的表）。
+ */
 export function inputToScalars(
   input: ProjectionInputDTO,
 ): Omit<Prisma.ScenarioCreateInput, 'name' | 'user' | 'salarySteps'> {
@@ -144,6 +166,8 @@ export function inputToScalars(
     cnInfantCount: d.infantCount,
     cnContinuingEducation: d.continuingEducation,
     cnHousingType: d.housingType,
+    // Only persist the tier when rent is actually selected, so no dirty data contradicts
+    // housingType.
     // 只有选了租房才存档位，避免留下与 housingType 矛盾的脏数据
     cnRentTier: d.housingType === 'rent' ? (d.rentTier ?? null) : null,
     cnElderlyCare: d.elderlyCare,

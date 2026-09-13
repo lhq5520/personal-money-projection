@@ -1,4 +1,10 @@
 /**
+ * Encode scenario parameters into a URL, so sharing needs no account.
+ *
+ * URL-safe base64 rather than flattening dozens of fields into a query string: the latter breaks
+ * old links the moment a field is added or removed, while the former only needs the JSON shape to
+ * stay backward compatible.
+ *
  * 把方案参数编码进 URL，实现无需登录的分享。
  *
  * 用 URL-safe base64 而不是把几十个字段摊平成 query string：
@@ -18,7 +24,10 @@ function fromUrlSafe(s: string): string {
   return padded + '='.repeat((4 - (padded.length % 4)) % 4);
 }
 
-/** 浏览器与 Node 都可用的 UTF-8 安全 base64 */
+/**
+ * UTF-8-safe base64 that works in both the browser and Node.
+ * 浏览器与 Node 都可用的 UTF-8 安全 base64
+ */
 function encodeBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);
   let binary = '';
@@ -36,7 +45,12 @@ export function encodeInputToParam(input: ProjectionInputDTO): string {
   return toUrlSafe(encodeBase64(JSON.stringify(input)));
 }
 
-/** 解析失败时返回 null 而不是抛错——分享链接被截断是常态，不该让整个页面白屏 */
+/**
+ * Return null rather than throwing on a parse failure — truncated share links are routine and
+ * shouldn't blank out the whole page.
+ *
+ * 解析失败时返回 null 而不是抛错——分享链接被截断是常态，不该让整个页面白屏
+ */
 export function decodeInputFromParam(param: string): ProjectionInputDTO | null {
   try {
     const parsed = projectionInputSchema.safeParse(JSON.parse(decodeBase64(fromUrlSafe(param))));
