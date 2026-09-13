@@ -1,9 +1,24 @@
 /**
+ * Differential verification against PolicyEngine's live API.
  * 对 PolicyEngine 实时 API 做差分验证。
  *
- *   pnpm data:verify                 # 默认矩阵
+ *   pnpm data:verify                 # the default matrix 默认矩阵
  *   pnpm data:verify --year 2026
  *   pnpm data:verify --states CA,NY,TX
+ *
+ * ## Why this exists
+ *
+ * Syncing can only guarantee "the numbers were copied right"; it cannot guarantee "the algorithm
+ * is right". Feeding the same households to this engine and to an independently maintained,
+ * mature implementation and diffing the results catches both classes of problem at once:
+ *   1. Our calculation logic is wrong — e.g. treating a credit as a deduction, or missing a
+ *      mid-year change;
+ *   2. State data has drifted — the YAML structures of 51 states differ, so parsing each one is
+ *      impractical, but if the results agree the data is fine.
+ *
+ * A difference does not mean we're wrong. PolicyEngine models a far broader scope than this
+ * project (assorted credits, refunds, benefits), so **systematic differences are expected**. The
+ * job of this script is to make those differences visible and explicable, not to force them to zero.
  *
  * ## 为什么要有这个
  *
@@ -34,7 +49,10 @@ const STATES =
   statesArg >= 0 ? args[statesArg + 1]!.split(',') : ['CA', 'NY', 'TX', 'IL', 'MA', 'CO', 'PA'];
 const INCOMES = [45_000, 90_000, 180_000, 400_000];
 
-/** 相对差异超过这个比例就算需要人工过目 */
+/**
+ * A relative difference above this fraction is flagged for a human to look at.
+ * 相对差异超过这个比例就算需要人工过目
+ */
 const TOLERANCE = 0.02;
 
 interface PeResult {
@@ -96,6 +114,8 @@ function ours(state: string, income: number) {
   input.jurisdiction = state;
   input.income.monthlySalary = income / 12;
   input.income.salaryMonths = 12;
+  // Zero out the 401(k): PolicyEngine's default household makes no retirement contributions, and
+  // without aligning that it isn't the same scenario.
   // 401(k) 归零：PolicyEngine 的默认家庭没有退休缴款，不对齐就不是同一个场景
   input.us.pretaxRetirementRate = 0;
   input.us.employerMatchRate = 0;
@@ -156,6 +176,7 @@ async function main(): Promise<void> {
       if (f.rel > TOLERANCE) flagged.push(`${state} ${money(income)} 联邦相差 ${(f.rel * 100).toFixed(1)}%`);
       if (s.rel > TOLERANCE) flagged.push(`${state} ${money(income)} 州税相差 ${(s.rel * 100).toFixed(1)}%`);
 
+      // Upstream is a public-good service, so throttle the request rate.
       // 上游是公益服务，控制请求频率
       await new Promise((r) => setTimeout(r, 250));
     }
@@ -165,6 +186,8 @@ async function main(): Promise<void> {
   if (flagged.length) {
     console.log(yellow(`\n以下组合超出 ${TOLERANCE * 100}% 容差，需人工判断是建模范围差异还是真的算错：`));
     for (const f of flagged) console.log(`  · ${f}`);
+    // Don't exit non-zero: differences are expected, and forcing them to zero would just push
+    // someone to loosen the threshold, defeating the point.
     // 不以非零码退出：差异是预期内的，强制归零会逼着人把阈值调松，反而失去意义
   } else {
     console.log(green('\n全部在容差内。'));

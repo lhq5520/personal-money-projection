@@ -27,10 +27,12 @@ const shRate = CN_PENSION_RATE + CN_MEDICAL_RATE + shanghai.unemployment;
 describe('缴费基数按法规推导', () => {
   it('下限 = 社平 × 60%，上限 = 社平 × 300%', () => {
     const r = socialBaseRange(shanghai);
+    // The average wage is the provincially pooled driver value and lives in provinces.ts.
     // 社平工资是省级统筹的驱动值，放在 provinces.ts
     const avgWage = getProvince(shanghai.province).avgWage;
     expect(r.min).toBe(Math.round(avgWage * 0.6));
     expect(r.max).toBe(Math.round(avgWage * 3));
+    // Before rounding, 300% / 60% is always exactly 5×; allow 1 yuan once both ends are rounded.
     // 300% / 60% 在未取整时恒为 5 倍；两端各自四舍五入后允许 1 元误差
     expect(Math.abs(r.max - r.min * 5)).toBeLessThanOrEqual(1);
   });
@@ -41,6 +43,7 @@ describe('缴费基数按法规推导', () => {
 
   it('部分城市的基数另有规定，用显式覆盖表达', () => {
     const sz = getCity('shenzhen');
+    // Shenzhen's pension is pooled provincially, so the floor is not "local average × 60%".
     // 深圳养老按省级统筹，下限不等于「本地社平 × 60%」
     expect(socialBaseRange(sz).min).toBe(4_775);
     expect(socialBaseRange(sz).min).not.toBe(derivedBase(sz).min);
@@ -133,7 +136,7 @@ describe('逐险种基数（广东各市养老与医疗分别统筹）', () => {
     const sz = getCity('shenzhen');
     const c = computeContributions(32_000, sz);
     const medical = c.breakdown.find((b) => b.code === 'cn-medical')!.amount;
-    const legacy = 27_549 * CN_MEDICAL_RATE; // 旧模型：医保也按养老上限封顶
+    const legacy = 27_549 * CN_MEDICAL_RATE; // old model: medical capped at the pension ceiling too 旧模型：医保也按养老上限封顶
     expect(medical).toBeGreaterThan(legacy);
   });
 
@@ -204,10 +207,12 @@ describe('城市与省份覆盖', () => {
   });
 
   it('同省各市共用同一套推导基数——这正是省级统筹的含义', () => {
+    // Nanjing, Suzhou and Wuxi are all in Jiangsu.
     // 南京、苏州、无锡同属江苏
     const js = ['nanjing', 'suzhou', 'wuxi'].map((c) => derivedBase(getCity(c)));
     expect(js[1]).toEqual(js[0]);
     expect(js[2]).toEqual(js[0]);
+    // But their rent deduction tiers differ — Nanjing is the provincial capital, the others aren't.
     // 但它们的租金扣除档位不同（南京是省会，苏州无锡不是）
     expect(getCity('nanjing').rentTier).toBe('tier1');
     expect(getCity('suzhou').rentTier).toBe('tier2');

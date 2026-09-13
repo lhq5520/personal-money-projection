@@ -4,6 +4,8 @@ import { resolveSalarySchedule } from './income.js';
 import { DEFAULT_INPUT } from './defaults.js';
 import type { ProjectionInput } from './types.js';
 
+// The engine deliberately depends on no runtime environment (no @types/node, no DOM), so this
+// deep-clones via JSON rather than structuredClone. ProjectionInput is pure JSON data, so it's safe.
 // 引擎刻意不依赖任何运行时环境（无 @types/node、无 DOM），
 // 所以这里用 JSON 深拷贝而非 structuredClone。ProjectionInput 是纯 JSON 数据，安全。
 const withInput = (patch: (i: ProjectionInput) => void): ProjectionInput => {
@@ -12,7 +14,12 @@ const withInput = (patch: (i: ProjectionInput) => void): ProjectionInput => {
   return clone;
 };
 
-/** 关掉所有增长和摩擦，退化成原型页面的静态模型，便于隔离验证单个改动 */
+/**
+ * Turn off all growth and friction, degenerating to the prototype page's static model so a
+ * single change can be verified in isolation.
+ *
+ * 关掉所有增长和摩擦，退化成原型页面的静态模型，便于隔离验证单个改动
+ */
 const staticInput = withInput((i) => {
   i.income.annualGrowthRate = 0;
   i.expense.annualGrowthRate = 0;
@@ -62,6 +69,7 @@ describe('端到端投影', () => {
       r.summary.finalValue / Math.pow(1.025, 20),
       2,
     );
+    // 2.5% inflation over 20 years cuts purchasing power to roughly 60%.
     // 2.5% 通胀跑 20 年，购买力打了约六折
     expect(r.summary.finalValueReal / r.summary.finalValue).toBeLessThan(0.65);
   });
@@ -90,8 +98,10 @@ describe('端到端投影', () => {
   });
 
   it('原型页面允许公积金净额为负；这里余额永远守恒', () => {
+    // The prototype computed pfNet = pfSelf*2 - withdraw, going straight to a negative number on
+    // over-withdrawal and extrapolating that negative for 20 years.
     // 原页面：pfNet = pfSelf*2 - withdraw，提取超额时直接给出负数并按负数外推 20 年
-    const legacyNet = 14_600 * 0.12 * 2 - 5_000; // 原页面写死 12%
+    const legacyNet = 14_600 * 0.12 * 2 - 5_000; // the prototype hard-coded 12% 原页面写死 12%
     expect(legacyNet).toBeLessThan(0);
     const r = projectTimeline(withInput((i) => { i.employerPlan.monthlyWithdrawal = 5_000; }));
     expect(r.summary.finalPlanBalance).toBeGreaterThanOrEqual(0);

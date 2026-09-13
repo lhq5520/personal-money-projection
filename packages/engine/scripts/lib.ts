@@ -1,4 +1,4 @@
-/** 同步脚本的共用工具。 */
+/** Shared helpers for the sync scripts. 同步脚本的共用工具。 */
 
 import { parse } from 'yaml';
 
@@ -14,10 +14,18 @@ export async function fetchYaml<T = unknown>(url: string): Promise<T> {
   return parse(await fetchText(url)) as T;
 }
 
-/** PolicyEngine 的日期键值表：{ '2018-01-01': 0.1, '2025-01-01': 0.12 } */
+/**
+ * PolicyEngine's date-keyed value table: { '2018-01-01': 0.1, '2025-01-01': 0.12 }.
+ * PolicyEngine 的日期键值表：{ '2018-01-01': 0.1, '2025-01-01': 0.12 }
+ */
 export type DatedValues = Record<string, number>;
 
 /**
+ * PolicyEngine's YAML makes heavy use of underscore-separated numbers like `184_500`.
+ * YAML 1.1 accepts that spelling; YAML 1.2 — the default for this project's parser — does not,
+ * and parses it as a string. Left unhandled, the sync would produce strings instead of numbers
+ * and raise no error at all: silently wrong, all the way down.
+ *
  * PolicyEngine 的 YAML 里大量使用 `184_500` 这种下划线分隔的数字。
  * YAML 1.1 认这个写法，YAML 1.2（本项目解析器的默认档）不认，会解析成字符串。
  * 不处理的话，同步出来的会是字符串而不是数字，且不会报错——静默错到底。
@@ -32,6 +40,12 @@ export function toNumber(v: unknown): number | undefined {
 }
 
 /**
+ * Get the value in effect for a tax year: the latest effective date no later than that year's end.
+ *
+ * Simply taking `${year}-01-01` won't do — plenty of parameters take effect mid-year, such as
+ * Canada's July 1, 2025 cut to the bottom federal rate, and the US standard deduction the OBBBA
+ * raised retroactively in July 2025.
+ *
  * 取某个税年生效的值：在所有不晚于该年末的生效日期中取最新的一个。
  *
  * 不能简单取 `${year}-01-01`——很多参数是年中生效的，
@@ -49,13 +63,21 @@ export function valueForYear(values: DatedValues, taxYear: number): number | und
   return best?.value;
 }
 
-/** 上游该参数最后一次变更的生效日期，用于判断「上游自己是不是也过期了」 */
+/**
+ * The effective date of upstream's last change to this parameter, used to judge whether upstream
+ * itself has gone stale.
+ *
+ * 上游该参数最后一次变更的生效日期，用于判断「上游自己是不是也过期了」
+ */
 export function latestEffectiveDate(values: DatedValues): string | undefined {
   const dates = Object.keys(values).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
   return dates.length ? dates.sort().at(-1) : undefined;
 }
 
-/** 从 PolicyEngine 的嵌套节点里剥出日期键值表（有的包一层 `values`） */
+/**
+ * Peel the date-keyed value table out of a nested PolicyEngine node — some wrap it in `values`.
+ * 从 PolicyEngine 的嵌套节点里剥出日期键值表（有的包一层 `values`）
+ */
 export function datedValues(node: unknown): DatedValues {
   if (node && typeof node === 'object' && 'values' in node) {
     return (node as { values: DatedValues }).values;
@@ -78,13 +100,18 @@ export const yellow = wrap('33');
 export const dim = wrap('2');
 export const bold = wrap('1');
 
-/** 比较两个数值并给出人类可读的差异行；一致则返回 null */
+/**
+ * Compare two values and produce a human-readable diff line; returns null when they agree.
+ * 比较两个数值并给出人类可读的差异行；一致则返回 null
+ */
 export function diffLine(
   label: string,
   ours: number | null | undefined,
   theirs: number | null | undefined,
   tolerance = 1e-9,
 ): string | null {
+  // Infinity is stored as null in JSON and comes back as null rather than undefined, so both have
+  // to count as "no value".
   // JSON 里的无穷大存成 null，回读时会变成 null 而不是 undefined，两者都要当作「无值」
   if (theirs === undefined || theirs === null) {
     return `${yellow('?')} ${label}: 上游缺失，保留本地值 ${ours ?? '—'}`;

@@ -1,4 +1,22 @@
 /**
+ * The data freshness audit — where CI's "never silently use stale data" guarantee lands.
+ *
+ *   pnpm data:audit              # exit non-zero on expiry (for CI)
+ *   pnpm data:audit --warn-only  # report without failing
+ *   pnpm data:audit --in 60      # early warning: also list what expires within 60 days
+ *
+ * ## The question this script answers
+ *
+ * "Is there a way to keep the information always current?" — No. None of the three countries has
+ * an official data interface; rate tables are legislation and administrative notices, not data
+ * services. Everything syncable has been synced, and the rest (all of China, Canada's CPP/EI and
+ * provincial data, two US states) can only be verified by hand.
+ *
+ * But "is there a way to guarantee that expiry is always detected?" — Yes, and this is it. Every
+ * dataset carries an effective period; once it passes, CI goes red and stays red until somebody
+ * updates it. That's more honest than pretending it can be automated, and more useful than
+ * letting it quietly go stale.
+ *
  * 数据时效审计 —— CI 保证「不会静默用旧数据」的落点。
  *
  *   pnpm data:audit              # 过期即非零退出（CI 用）
@@ -57,6 +75,8 @@ function main(): void {
   console.log(bold(`\n数据时效审计 · ${NOW.toISOString().slice(0, 10)}`));
   console.log(dim(`共 ${datasets.length} 个数据集　预警窗口 ${SOON_DAYS} 天\n`));
 
+  // Group by degree of automation so a maintainer can see at a glance which ones they personally
+  // have to handle.
   // 按自动化程度汇总，让维护者一眼看出「哪些是我必须亲自管的」
   const byAuto = new Map<string, number>();
   for (const d of datasets) byAuto.set(d.automation, (byAuto.get(d.automation) ?? 0) + 1);

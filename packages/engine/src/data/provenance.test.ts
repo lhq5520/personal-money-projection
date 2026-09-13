@@ -50,6 +50,9 @@ describe('引擎的数据时效警告', () => {
   });
 
   it('数据旧与数据未核对是两回事，警告也应分开', () => {
+    // Jiangxi, where Nanchang sits, hasn't published 2026 bases yet, so the **officially
+    // published** 2024 figures are in use. The numbers themselves are verified and merely from an
+    // older period — so this should report "expired", not "unverified".
     // 南昌所属的江西省尚未公布 2026 年度基数，用的是 2024 年度的**官方公布值**。
     // 数字本身经过核对，只是期次旧——所以该报「已过期」，不该报「待核对」。
     const r = projectTimeline(withCity('nanchang'), 7.2, at('2026-09-12'));

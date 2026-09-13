@@ -20,7 +20,10 @@ const make = (patch: (i: ProjectionInput) => void): ProjectionInput => {
   return i;
 };
 
-/** 年薪由 月薪 × 薪数 得到，测试里直接给年薪更直观 */
+/**
+ * Annual salary is monthly × months; specifying the annual figure directly reads better in tests.
+ * 年薪由 月薪 × 薪数 得到，测试里直接给年薪更直观
+ */
 const atSalary = (annual: number, patch: (i: ProjectionInput) => void = () => {}) =>
   US_REGION.computeYear(
     make((i) => {
@@ -43,6 +46,7 @@ describe('FICA', () => {
     const high = computeFica(500_000, 'single');
     expect(high.socialSecurity).toBeCloseTo(SOCIAL_SECURITY_WAGE_BASE * 0.062, 2);
     expect(high.socialSecurityCapped).toBe(true);
+    // Past the cap, a raise adds nothing to Social Security tax.
     // 超过上限后再涨薪，社会保障税一分不增
     expect(computeFica(1_000_000, 'single').socialSecurity).toBeCloseTo(high.socialSecurity, 6);
   });
@@ -54,6 +58,7 @@ describe('FICA', () => {
   it('附加医疗保险税只对超过起征点的部分加征 0.9%', () => {
     expect(computeFica(200_000, 'single').additionalMedicare).toBeCloseTo(0, 6);
     expect(computeFica(300_000, 'single').additionalMedicare).toBeCloseTo(900, 2);
+    // Married filing jointly has a higher threshold.
     // 已婚合并申报的起征点更高
     expect(computeFica(300_000, 'married-joint').additionalMedicare).toBeCloseTo(450, 2);
   });
@@ -62,6 +67,8 @@ describe('FICA', () => {
 describe('联邦所得税（黄金用例）', () => {
   it('单身、年薪 10 万、加州、无 401(k)：应税所得 = 收入 − 标准扣除', () => {
     const y = atSalary(100_000);
+    // No literal here: the standard deduction comes from synced data and moves with the tax
+    // year. Hard-coding it would make the test misfire after an update.
     // 不写死数字：标准扣除来自同步数据，随税年变化。写死会让测试在数据更新后误报。
     const sd = FEDERAL_STANDARD_DEDUCTION.single;
     expect(y.taxableAnnual).toBeCloseTo(100_000 - sd, 2);
@@ -70,11 +77,16 @@ describe('联邦所得税（黄金用例）', () => {
   it('联邦税额与逐档累进的独立计算一致', () => {
     const y = atSalary(100_000);
     const federal = y.taxBreakdown.find((t) => t.code === 'national')!.amount;
+    // Recompute independently with the generic progressive engine to cross-check the assembly
+    // logic in us/index.ts.
     // 用通用累进引擎独立复算一遍，交叉验证 us/index.ts 的组装逻辑
     expect(federal).toBeCloseTo(bracketTax(FEDERAL_BRACKETS.single, y.taxableAnnual), 2);
   });
 
   it('标准扣除随税年同步，且已反映 OBBBA 的调整', () => {
+    // In July 2025 the OBBBA retroactively raised the single standard deduction from 15,000 to
+    // 15,750, inflation-adjusted each year thereafter. Anything still equal to the old 15,000
+    // means the synced data hasn't kept up.
     // 2025 年 7 月 OBBBA 追溯把单身标准扣除由 15,000 提高到 15,750，此后逐年通胀调整。
     // 任何等于旧值 15,000 的情况都说明同步数据没跟上。
     expect(FEDERAL_STANDARD_DEDUCTION.single).toBeGreaterThan(15_000);
@@ -100,8 +112,11 @@ describe('联邦所得税（黄金用例）', () => {
     const y = atSalary(100_000);
     const state = y.taxBreakdown.find((t) => t.code === 'regional')!.amount;
     const ca = getState('CA');
+    // Thresholds come from synced data: California indexes its brackets to CPI annually, so a
+    // literal would misfire after an update.
     // 阈值取自同步数据：加州每年按 CPI 调整分档，写死会在数据更新后误报
     const taxable = 100_000 - ca.standardDeduction.single;
+    // California's personal exemption comes off the tax itself, not off taxable income.
     // 加州的个人免税额是从税额里直接抵扣的，不是从应税所得里扣
     const expected = bracketTax(ca.brackets!.single, taxable) - ca.exemptionCredit!.single;
     expect(state).toBeCloseTo(expected, 2);
@@ -111,6 +126,7 @@ describe('联邦所得税（黄金用例）', () => {
     const ca = getState('CA');
     const credit = ca.exemptionCredit!.single;
     expect(credit).toBeGreaterThan(0);
+    // The same fixed credit is a far larger share of a low earner's state tax than a high one's.
     // 同一笔固定抵免，占低收入者州税的比例远高于高收入者
     const lowShare = credit / atSalary(45_000).taxBreakdown.find((t) => t.code === 'regional')!.amount;
     const highShare = credit / atSalary(400_000).taxBreakdown.find((t) => t.code === 'regional')!.amount;
@@ -118,6 +134,7 @@ describe('联邦所得税（黄金用例）', () => {
   });
 
   it('抵免不会把州税压成负数', () => {
+    // When income is low enough that almost no state tax is due, the credit can only take it to 0.
     // 收入低到几乎不交州税时，抵免只能把税额降到 0
     const y = atSalary(12_000);
     const state = y.taxBreakdown.find((t) => t.code === 'regional')?.amount ?? 0;
@@ -127,6 +144,8 @@ describe('联邦所得税（黄金用例）', () => {
   it('加州分档已同步到当前税年，不再是手工的旧值', () => {
     const ca = getState('CA');
     expect(stateDataTaxYear('CA')).toBe(US_TAX_YEAR);
+    // The bottom bracket's upper bound drifts up with CPI each year; 2024's 10,756 shouldn't
+    // still be here.
     // 最低档上界会随 CPI 逐年上移；2024 年的 10,756 不应再出现
     expect(ca.brackets!.single[0]!.upTo).toBeGreaterThan(10_756);
     expect(ca.brackets!.single.map((b) => b.rate)).toEqual([
@@ -137,6 +156,7 @@ describe('联邦所得税（黄金用例）', () => {
   it('俄亥俄刻意不同步——上游把「税收悬崖」编码成了隐含平均税率，直接采信会对低收入者多征税', () => {
     expect(stateDataTaxYear('OH')).toBe(MANUAL_STATE_TAX_YEAR);
     const oh = getState('OH');
+    // Ohio is statutorily 0% below $26,050, and the local manual values preserve that zero bracket.
     // 俄亥俄法定 26,050 美元以下为 0%，本地手工值保留了这个 0 档
     expect(oh.brackets!.single[0]!.rate).toBe(0);
   });
@@ -153,6 +173,7 @@ describe('联邦所得税（黄金用例）', () => {
     );
     expect(tx.taxBreakdown.some((t) => t.code === 'regional')).toBe(false);
     expect(getState('TX').brackets).toBeNull();
+    // At the same salary, Texas take-home must exceed California's.
     // 同样年薪，德州到手一定高于加州
     expect(tx.netAnnual).toBeGreaterThan(atSalary(100_000).netAnnual);
   });
@@ -174,6 +195,7 @@ describe('401(k)', () => {
       150_000 / 12,
     );
     expect(with401k.taxAnnual).toBeLessThan(without.taxAnnual);
+    // FICA is entirely unchanged.
     // FICA 完全不变
     expect(with401k.socialInsuranceAnnual).toBeCloseTo(without.socialInsuranceAnnual, 6);
   });
@@ -184,6 +206,7 @@ describe('401(k)', () => {
       1,
       400_000 / 12,
     );
+    // 50% would imply 200k of contributions; the statutory limit caps it.
     // 按 50% 应缴 20 万，实际封顶在法定上限
     expect(y.planSelfAnnual).toBeCloseTo(ELECTIVE_DEFERRAL_LIMIT, 2);
   });

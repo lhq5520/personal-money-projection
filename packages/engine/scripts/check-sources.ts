@@ -1,4 +1,22 @@
 /**
+ * Change detection for sources that can't be synced automatically (all of China + Canada's CRA).
+ *
+ *   pnpm data:check            # detect changes on official pages + report local data freshness
+ *   pnpm data:check --snapshot # store the current page fingerprints as the baseline
+ *
+ * ## Why detect only, and not parse
+ *
+ * China has no usable official interface: the National Bureau of Statistics' easyquery returns
+ * 403 UrlACL to automated access, and local human resources bureaus publish only HTML notices,
+ * varying in structure and frequently redesigned.
+ *
+ * Auto-parsing government web pages would be irresponsible in this setting — one silent parse
+ * error and a user makes a ten-year financial decision on the wrong contribution base, with
+ * nobody ever noticing. So this script answers exactly one question: **"did the official page
+ * change, should I go look?"** Value changes are verified by a human and written into cities.ts.
+ *
+ * Less elegant than automatic syncing, but honest.
+ *
  * 无法自动同步的数据源的变更检测（中国全部 + 加拿大 CRA）。
  *
  *   pnpm data:check            # 检测官方页面是否变化 + 报告本地数据时效
@@ -44,6 +62,12 @@ function loadSnapshot(): Snapshot {
 }
 
 /**
+ * Page fingerprint.
+ *
+ * Hash only the digit strings in the body text: government homepages tend to carry carousels,
+ * timestamps, and visit counters, so hashing the whole page reports "changed" every single time —
+ * noisy enough that nobody looks anymore. What we actually care about is whether the numbers moved.
+ *
  * 页面指纹。
  *
  * 只取正文里的数字串来做哈希：政府网站首页往往带轮播、时间戳、访问计数，
@@ -61,7 +85,9 @@ function fingerprint(html: string): string {
 async function main(): Promise<void> {
   console.log(bold('\n无上游数据源检查（中国社保 + 加拿大 CRA）'));
 
-  /* ---------------- 1. 本地数据时效 ---------------- */
+  /* ---------------- 1. Local data freshness 本地数据时效 ---------------- */
+  // Contribution bases are pooled provincially, so report by province — updating one province
+  // benefits every city in it at once.
   // 缴费基数是省级统筹的，所以按省报告——一个省更新，全省各市一起受益
   console.log(bold('\n[1] 中国省级数据时效'));
   const expired: string[] = [];
@@ -82,10 +108,15 @@ async function main(): Promise<void> {
     for (const e of expired) console.log(`      ${e}`);
   }
 
-  /* ---------------- 2. 官方页面变更检测 ---------------- */
+  /* ---------------- 2. Official page change detection 官方页面变更检测 ---------------- */
   //
+  // ⚠ This section has a poor signal-to-noise ratio. Treat it as a hint and **do not** gate CI on it.
   // ⚠ 这一节的信噪比很低，仅作参考，**不要**据此设 CI 门禁。
   //
+  // These point at bureau homepages, which rotate news daily, so the fingerprint changes almost
+  // by necessity. The genuinely reliable trigger is the calendar: China's social insurance year
+  // rolls over on July 1 and notices land in July–August, so "effective period expired" is itself
+  // the most accurate signal — that's data:audit's job, and it is the actual CI gate.
   // 指向的是人社局首页，而首页每天滚动新闻，指纹几乎必然变化。
   // 真正可靠的触发器是日历：中国社保年度每年 7 月 1 日切换、公告在 7–8 月发布，
   // 所以「适用期到期」本身就是最准的信号——那由 data:audit 负责，它才是 CI 的门禁。
@@ -130,7 +161,7 @@ async function main(): Promise<void> {
     console.log(`\n  ${green('→')} 基线已写入 src/data/generated/cn-source-snapshot.json`);
   }
 
-  /* ---------------- 3. 加拿大官方页面变更检测 ---------------- */
+  /* ---------------- 3. Canada official page change detection 加拿大官方页面变更检测 ---------------- */
   console.log(bold('\n[3] 加拿大 CRA 页面变更检测'));
   for (const src of CA_SOURCES) {
     try {
@@ -157,7 +188,7 @@ async function main(): Promise<void> {
     }
   }
 
-  /* ---------------- 4. 结论 ---------------- */
+  /* ---------------- 4. Conclusion 结论 ---------------- */
   console.log(bold('\n结论'));
   if (changed === 0 && expired.length === 0) {
     console.log(green('  数据在适用期内，官方页面无变动。'));

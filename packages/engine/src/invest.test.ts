@@ -112,6 +112,8 @@ describe('蒙特卡洛', () => {
       paths,
       seed: 7,
     });
+    // Percentiles can't validate the mean, so compare the median against the theoretical one.
+    // Theoretical median = S0 · exp(muLog · T), with muLog = ln(1.07) − 0.5·0.15².
     // 分位数不足以验证均值，这里用中位数与理论中位数比对
     // 理论中位数 = S0 · exp(muLog · T)，muLog = ln(1.07) − 0.5·0.15²
     const muLog = Math.log(1.07) - 0.5 * 0.15 * 0.15;

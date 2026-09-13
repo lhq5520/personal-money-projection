@@ -18,6 +18,8 @@ describe('综合所得税率表', () => {
       if (!Number.isFinite(b.upTo)) continue;
       const atBoundary = comprehensiveTax(b.upTo);
       const justAbove = comprehensiveTax(b.upTo + 1);
+      // No jump at the boundary: one more yuan of income must not add more tax than the next
+      // bracket's rate.
       // 边界处不应出现跳变：多 1 元收入，多缴的税不应超过下一档税率
       expect(justAbove - atBoundary).toBeLessThanOrEqual(0.45 + 1e-9);
       expect(justAbove).toBeGreaterThanOrEqual(atBoundary);
@@ -26,7 +28,7 @@ describe('综合所得税率表', () => {
 
   it.each([
     [0, 0],
-    [-50_000, 0], // 应纳税所得额为负时不退税
+    [-50_000, 0], // negative taxable income yields no refund 应纳税所得额为负时不退税
     [36_000, 1_080],
     [36_001, 1_080.1],
     [144_000, 11_880],
@@ -40,7 +42,7 @@ describe('综合所得税率表', () => {
   });
 
   it('原型页面在 30% 档封顶，会系统性少算高收入者的税', () => {
-    const legacy = (t: number) => Math.max(0, t * 0.3 - 52_920); // 原页面的最后一个分支
+    const legacy = (t: number) => Math.max(0, t * 0.3 - 52_920); // the prototype's last branch 原页面的最后一个分支
     const taxable = 1_500_000;
     expect(comprehensiveTax(taxable)).toBeGreaterThan(legacy(taxable));
     expect(comprehensiveTax(taxable) - legacy(taxable)).toBeCloseTo(96_000, 0);
@@ -54,6 +56,7 @@ describe('综合所得税率表', () => {
 
 describe('全年一次性奖金单独计税', () => {
   it('按 奖金/12 查月度税率表，而不是原型页面写死的 10% 档', () => {
+    // The prototype used bonus*.10-210 — the second bracket, for any amount whatsoever.
     // 原页面：bonus*.10-210，对任何金额都用第二档
     expect(separateBonusTax(30_000)).toBeCloseTo(900, 2); // 30000/12=2500 → 3% 档
     expect(30_000 * 0.1 - 210).toBeCloseTo(2_790, 2); // 原页面算出的错误值
@@ -91,6 +94,8 @@ describe('全年一次性奖金单独计税', () => {
 
 describe('年终奖计税方式择优', () => {
   it('高薪 + 小额奖金时，单独计税更省', () => {
+    // Regular salary already puts them in the 20% bracket, while a 30,000 bonus taxed separately
+    // is only 3%.
     // 常规工资已经把人推到 20% 档，奖金 30000 单独计税只按 3%
     const r = chooseBonusTaxStrategy(250_000, 30_000, true);
     expect(r.strategy).toBe('separate');
@@ -101,8 +106,10 @@ describe('年终奖计税方式择优', () => {
   it('常规工资未用满扣除额度时，并入综合所得更省——奖金可以吸收掉负的应纳税所得额', () => {
     const r = chooseBonusTaxStrategy(-20_000, 50_000, true);
     expect(r.strategy).toBe('merged');
+    // Merged, taxable income is only 30,000, taxed at 3% for 900.
     // 并入后应纳税所得额只剩 30000，按 3% 计 900 元
     expect(r.totalTax).toBeCloseTo(900, 2);
+    // Taxed separately, the full 50,000 is taxed — clearly more expensive.
     // 单独计税则要为全部 50000 缴税，明显更贵
     expect(r.separateTotal).toBeGreaterThan(r.totalTax);
   });
