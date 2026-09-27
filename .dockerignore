@@ -1,0 +1,49 @@
+# The build context is the repo root (the API image needs packages/shared source), but the repo is
+# ~414MB of which ~407MB is node_modules and only ~3MB is actual source. Excluding node_modules is
+# by far the highest-value line here — it also stops the host's darwin-arm64 Prisma engine from
+# being copied into a linux image.
+# 构建上下文是仓库根目录（API 镜像需要 packages/shared 的源码），但仓库 414MB 里
+# 407MB 是 node_modules，真实源码只有约 3MB。排除 node_modules 是这里性价比最高的一条，
+# 它同时防止宿主机的 darwin-arm64 Prisma 引擎被拷进 linux 镜像。
+**/node_modules
+
+# Local build artifacts — apps/web/dist and dist-singlefile both exist on disk right now.
+# 本地构建产物——apps/web/dist 和 dist-singlefile 目前都存在于磁盘上
+**/dist
+**/dist-singlefile
+**/build
+**/coverage
+**/.turbo
+**/*.tsbuildinfo
+
+# Secrets. Four .env files currently exist on disk; none may enter the image.
+# In production these values are injected at runtime from Render's environment settings,
+# never baked into the image.
+# 密钥。磁盘上现有 4 个 .env 文件，一个都不能进镜像。
+# 生产环境这些值由 Render 的环境变量在运行时注入，绝不烤进镜像。
+**/.env
+**/.env.*
+
+.git
+.github
+.vscode
+.idea
+**/.DS_Store
+*.log
+
+# Not needed at runtime. The frontend is deployed separately to Vercel, so nothing under
+# apps/web or packages/engine is part of this image.
+# 运行时用不到。前端单独部署到 Vercel，所以 apps/web 和 packages/engine 下的内容
+# 都不属于这个镜像。
+docs
+README.md
+README.en.md
+docker-compose.yml
+**/Dockerfile
+.dockerignore
+render.yaml
+vercel.json
+
+# Leftover local sqlite (already in .gitignore, belt and braces here)
+# 本地 sqlite 残留（.gitignore 里已有，这里再兜一层）
+apps/api/prisma/migrations/dev.db*

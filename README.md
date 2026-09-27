@@ -81,6 +81,58 @@ pnpm dev                      # 前端 :5173，API :8787
 | `pnpm --filter @pmp/web build:singlefile` | 打包成**单个 HTML 文件**（约 322KB），双击即用、可离线 |
 | `pnpm db:studio` | Prisma Studio 看数据 |
 
+## 部署
+
+前后端分开部署，**必须挂在同一个注册域名的两个子域下**：
+
+| 部分 | 平台 | 域名 |
+|---|---|---|
+| 前端（静态站） | Vercel | `app.你的域名` |
+| API（常驻进程） | Render | `api.你的域名` |
+| 数据库 | Neon（托管 Postgres） | — |
+
+> ⚠️ **不要用平台默认域名**（`*.vercel.app` + `*.onrender.com`）。它们的注册域名不同，浏览器
+> 判定为跨站，`sameSite: 'lax'` 的会话 cookie 不会被发送——现象是登录接口返回 200，
+> 但下一个请求就是未登录。同一域名下的两个子域属于**同站**，现有的 cookie 配置无需任何改动。
+
+### API → Render
+
+在 Render 里 **New → Blueprint**，选这个仓库，它会读取根目录的 `render.yaml` 自动建服务。
+创建时会提示填三个变量：
+
+| 变量 | 值 |
+|---|---|
+| `DATABASE_URL` | Neon 的**直连**串（不带 `-pooler`），带 `?sslmode=require` |
+| `BETTER_AUTH_URL` | `https://api.你的域名` |
+| `WEB_ORIGIN` | `https://app.你的域名` |
+
+`BETTER_AUTH_SECRET` 由 Render 自动生成，不用管。建好后在 Settings → Custom Domain 里
+加 `api.你的域名`。
+
+数据库迁移由 `render.yaml` 的 `preDeployCommand` 在新版本接管流量**之前**自动执行；
+失败则中止部署，旧版本继续服务。
+
+`region` 必须和 Neon 的 region 一致（都选新加坡）——Prisma 每个请求走多个往返，跨洲不匹配
+会让应用明显变卡，而且 Render 的 region 建好后**不能改**。因为 API 是常驻进程而非
+serverless，`DATABASE_URL` 用 Neon 的**直连**串即可，应用和迁移共用，不需要连接池。
+
+> Render 免费档在 15 分钟无活动后休眠，下一个访客要等约一分钟冷启动。升到付费档即可常驻。
+
+### 前端 → Vercel
+
+Root Directory 设为**仓库根目录**，其余构建参数由 `vercel.json` 指定。只需配一个环境变量：
+
+```
+VITE_API_URL = https://api.你的域名
+```
+
+它在**构建期**烤进 bundle，改了必须重新部署。
+
+### 只要计算器，不要账号
+
+`pnpm --filter @pmp/web build:singlefile` 产出单个 HTML，丢到任何静态托管即可，
+无需后端和数据库。
+
 ## 数据与隐私
 
 方案以**关系化明文**存在 Postgres 里（不是加密 blob），换来的是服务端可查询、可聚合、

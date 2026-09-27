@@ -1,0 +1,71 @@
+# Render Blueprint for the API (apps/api) only. The frontend deploys to Vercel separately.
+#
+# Render Blueprint，只部署 API（apps/api）。前端单独部署到 Vercel。
+
+services:
+  - type: web
+    name: pmp-api
+    runtime: docker
+
+    # The build context is the repo ROOT, not apps/api: @pmp/shared has no dist and exposes
+    # ./src/index.ts directly, so its TypeScript source is a genuine build input — as are the
+    # lockfile and pnpm-workspace.yaml.
+    # 构建上下文是「仓库根目录」而非 apps/api：@pmp/shared 没有 dist、直接暴露
+    # ./src/index.ts，所以它的 TypeScript 源码是真正的构建输入——lockfile 和
+    # pnpm-workspace.yaml 同理。
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+
+    # Must match the Neon database's region (Neon: aws-ap-southeast-1). Prisma issues several
+    # round trips per request, so a cross-continent mismatch is the easiest way to make the app
+    # feel broken. Render regions cannot be changed after the service is created.
+    # 必须和 Neon 数据库的 region 一致（Neon 选 aws-ap-southeast-1）。Prisma 每个请求
+    # 要走多个往返，跨洲不匹配是让应用「感觉很卡」的最简单方式。
+    # Render 的 region 在服务创建后不可更改。
+    region: singapore
+    plan: free
+
+    # /health actually runs SELECT 1 against the database, so this checks the whole path rather
+    # than just "the process is alive".
+    # /health 会真的对数据库执行一次 SELECT 1，所以这检查的是整条链路，
+    # 而不只是「进程还活着」。
+    healthCheckPath: /health
+
+    # Migrations run after the build and before the new version starts taking traffic. If this
+    # fails the deploy is aborted and the previous version keeps serving.
+    # The working directory is /repo/apps/api, set by the Dockerfile.
+    # 迁移在构建之后、新版本接管流量之前执行。失败则部署中止，旧版本继续服务。
+    # 工作目录是 Dockerfile 里设定的 /repo/apps/api。
+    preDeployCommand: ./node_modules/.bin/prisma migrate deploy
+
+    envVars:
+      # Render injects PORT itself (default 10000); apps/api/src/env.ts reads it first, so the
+      # port is deliberately NOT pinned here — one less thing that can drift out of sync.
+      # Render 自己注入 PORT（默认 10000），apps/api/src/env.ts 会优先读它，
+      # 所以这里刻意不写死端口——少一个会失步的地方。
+
+      # Neon's DIRECT (non-pooler) connection string, with ?sslmode=require. This is a
+      # long-lived process rather than a serverless function, so Prisma's own pool is enough and
+      # the pooler is unnecessary — it would in fact break `prisma migrate deploy`, since
+      # PgBouncer has no advisory locks.
+      # Neon 的「直连」（非 pooler）串，带 ?sslmode=require。这是常驻进程而非 serverless，
+      # Prisma 自带的连接池就够了，不需要 pooler——用了反而会让 `prisma migrate deploy`
+      # 失败，因为 PgBouncer 没有 advisory lock。
+      - key: DATABASE_URL
+        sync: false
+
+      # Render generates a random 256-bit base64 value. apps/api/src/env.ts refuses to start in
+      # production if this still contains "dev-only", so a generated value is what you want.
+      # Render 会生成一个随机的 256 位 base64 值。若该值仍含 "dev-only"，
+      # apps/api/src/env.ts 会拒绝在生产环境启动，所以这里用生成值正合适。
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+
+      # Both must be subdomains of ONE registrable domain, otherwise the browser treats the
+      # frontend and API as cross-site and never sends the sameSite: 'lax' session cookie.
+      # 两者必须是「同一个注册域名」下的子域，否则浏览器会把前端和 API 判定为跨站，
+      # sameSite: 'lax' 的会话 cookie 根本不会被发送。
+      - key: BETTER_AUTH_URL   # https://api.<your-domain>
+        sync: false
+      - key: WEB_ORIGIN        # https://app.<your-domain>
+        sync: false
