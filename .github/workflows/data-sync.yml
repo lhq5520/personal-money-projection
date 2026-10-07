@@ -47,6 +47,8 @@ jobs:
         run: pnpm test
 
       - name: 有变更则开 PR
+        id: create_pr
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           branch: chore/data-sync
@@ -60,6 +62,10 @@ jobs:
                   且可能编码了它自己的实现技巧，参见俄亥俄的例子）
             - [ ] 差分验证的超差项都能解释（建模范围差异 vs 真的算错）
           labels: data
+      - name: PR 创建受限时提示
+        if: steps.create_pr.outcome == 'failure'
+        run: |
+          echo "::warning::Repository settings currently disallow GitHub Actions from creating pull requests. Enable “Allow GitHub Actions to create and approve pull requests” to restore automatic PR creation."
 
   # ---- The freshness audit: this is the gate that guarantees stale data is never used silently
   #      时效审计：这才是「保证不会静默用旧数据」的门禁 ----
