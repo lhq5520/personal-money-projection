@@ -1,6 +1,6 @@
 {
   "taxYear": 2026,
-  "syncedAt": "2026-09-12",
+  "syncedAt": "2026-10-12",
   "source": "PolicyEngine/policyengine-us",
   "brackets": {
     "single": [
@@ -213,15 +213,15 @@
     "MN": {
       "single": [
         {
-          "upTo": 32570,
+          "upTo": 33310,
           "rate": 0.0535
         },
         {
-          "upTo": 106990,
+          "upTo": 109430,
           "rate": 0.068
         },
         {
-          "upTo": 198630,
+          "upTo": 203150,
           "rate": 0.0785
         },
         {
@@ -231,15 +231,15 @@
       ],
       "married": [
         {
-          "upTo": 47620,
+          "upTo": 48700,
           "rate": 0.0535
         },
         {
-          "upTo": 189180,
+          "upTo": 193480,
           "rate": 0.068
         },
         {
-          "upTo": 330410,
+          "upTo": 337930,
           "rate": 0.0785
         },
         {
@@ -337,11 +337,11 @@
     "OR": {
       "single": [
         {
-          "upTo": 4400,
+          "upTo": 4550,
           "rate": 0.0475
         },
         {
-          "upTo": 11100,
+          "upTo": 11400,
           "rate": 0.0675
         },
         {
@@ -355,11 +355,11 @@
       ],
       "married": [
         {
-          "upTo": 8800,
+          "upTo": 9100,
           "rate": 0.0475
         },
         {
-          "upTo": 22200,
+          "upTo": 22800,
           "rate": 0.0675
         },
         {
